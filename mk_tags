@@ -1,0 +1,6 @@
+#!/bin/bash
+
+find . -name "*.c" -o -name "*.cpp" -o -name "*.h"| grep -v git | awk '{"pwd"|getline dir} {print dir$0}' | sed 's/\.//' | grep -v "login.pb.go" > cscope.files
+cscope -bkq -i cscope.files
+#ctags -R
+ctags -R . >tags
