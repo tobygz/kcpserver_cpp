@@ -356,7 +356,7 @@ namespace net{
     void tcpclient::OnClose(){
         //assert(false);
         close(m_sock);
-        LOG("[ERROR] tcpclient: %s closed ", m_name);
+        LOG("[ERROR] fatal error, tcpclient: %s closed ", m_name);
     }
 
 }

@@ -270,7 +270,9 @@ namespace net{
         m_pPid = *(unsigned long long*)(m_pbody+5+*plen + *plenTar + *plenPa + *plenRes);
         m_pMsgid= *(unsigned int*)(m_pbody+5+*plen + *plenTar + *plenPa +*plenRes+ sizeof(unsigned long long));
 
-        assert( chkPt( m_pMsgid ) );
+        if(netServer::g_netServer->isNet()){
+            assert( chkPt( m_pMsgid ) );
+        }
 
         m_pBodyLen = *(unsigned int*)(m_pbody+5+*plen + *plenTar + *plenPa + *plenRes + sizeof(unsigned long long) + sizeof(unsigned int));
         if(m_pBodyLen==0){

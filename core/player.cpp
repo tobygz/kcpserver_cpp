@@ -1,7 +1,7 @@
 #include "player.h"
 #include <stdio.h>
 #include <assert.h>
-//#include "./pb/login.pb.h"
+#include "./pb/login.pb.h"
 
 
 #include "../log.h"
@@ -38,32 +38,49 @@ namespace net{
         m_roomid = roomid;
     }
 
+    void playerObj::sendComRetMsg(unsigned int msgid, int ret){
+        S2CCommonRet_1000 *pmsg = new S2CCommonRet_1000;
+        pmsg->set_ptid(msgid);
+        pmsg->set_ret(ret);
+        sendPbMsg(msgid, pmsg);
+        delete pmsg;
+    }
+    void playerObj::sendMsg(unsigned char* pbuff, size_t size, int msgid){
+        //call to net
+        connRpcObj::m_inst->rpcCallNet((char*)"PushMsg2Client", m_pid, msgid, pbuff, size);
+        LOG("playerMgr::sendMsg pid: %d rid: %ld, size: %d", m_pid, m_rid, size);
+    }
+    void playerObj::sendPbMsg(unsigned int msgid, ::google::protobuf::Message* pmsg){
+        m_os.str("");
+        pmsg->SerializeToOstream(&m_os);
+        int len = m_os.str().size();
+        assert(len+8 <1024);
+        memcpy(m_sendBuf, &len, 4);
+        memcpy(m_sendBuf+4, &msgid, 4);
+        memcpy(m_sendBuf+8, (unsigned char*)m_os.str().c_str(), len );
+        sendMsg((unsigned char*)m_sendBuf, len+8, msgid);
+    }
+
     void playerObj::sendKcpMsg(unsigned char* pbuff, size_t size){
         LOG("playerObj::sendKcpMsg pid: %d rid: %d sessid: %d size: %d", m_pid, m_rid, m_sessid, size );
         printBytes(pbuff, size, (char*)"sendKcpMsg");
         //call kcp
         KCPServer::m_sInst->sendMsg(m_sessid, pbuff, size);
     }
-    void playerObj::sendMsg(unsigned char* pbuff, size_t size){
-        //call to net
-        connRpcObj::m_inst->rpcCallNet((char*)"PushMsg2Client", m_rid, 0, pbuff, size);
-    }
-    void playerObj::sendPbMsg(::google::protobuf::Message* pmsg){
-        m_os.str("");
-        pmsg->SerializeToOstream(&m_os);
-        sendMsg((unsigned char*)m_os.str().c_str(), m_os.str().size());
-    }
-
     void playerObj::sendPbKcpMsg(unsigned int msgid, ::google::protobuf::Message* pmsg){
         pmsg->SerializeToOstream(&m_os);
         int len = m_os.str().size();
-        char *p = new char[len + 8 ];
-        memcpy(p, &len, 4);
-        memcpy(p+4, &msgid, 4);
-        memcpy(p+8, (unsigned char*)m_os.str().c_str(), len );
+        assert(len+8 <1024);
+        memcpy(m_sendBuf, &len, 4);
+        memcpy(m_sendBuf+4, &msgid, 4);
+        memcpy(m_sendBuf+8, (unsigned char*)m_os.str().c_str(), len );
 
-        sendKcpMsg((unsigned char*)p, len+8);
-        delete[] p;
+        sendKcpMsg((unsigned char*)m_sendBuf, len+8);
+    }
+
+    void playerObj::Offline(){
+        m_off = true;
+        KCPServer::m_sInst->closeConn(m_sessid);
     }
 
     //for mgr
@@ -98,7 +115,9 @@ namespace net{
         if( it == m_ridPMap.end()){
             return ;
         }
+        it->second->Offline();
         m_ridPMap.erase(it);
+        delete it->second;
     }
 
 }

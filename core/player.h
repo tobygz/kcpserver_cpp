@@ -6,6 +6,7 @@
 #include "./pb/login.pb.h"
 
 using namespace std;
+using namespace pb;
 
 namespace net{
 
@@ -17,6 +18,7 @@ namespace net{
             unsigned long long m_rid;
             int m_roomid;
             char m_acc[64];
+            unsigned char m_sendBuf[1024];
             bool m_off;
             int m_camp;
             ostringstream m_os;
@@ -35,17 +37,16 @@ namespace net{
             }
 
             //tcp
-            void sendMsg(unsigned char*, size_t size);
-            void sendPbMsg(::google::protobuf::Message*);
+            void sendComRetMsg(unsigned int msgid, int ret);
+            void sendMsg(unsigned char*, size_t size, int msgid=0);
+            void sendPbMsg(unsigned int msgid, ::google::protobuf::Message*);
 
             void sendKcpMsg(unsigned char*, size_t size);
             void sendPbKcpMsg(unsigned int msgid, ::google::protobuf::Message*);
 
 
             bool isOff(){ return m_off; }
-            void Offline(){
-                m_off = true;
-            }
+            void Offline();
     };
 
     class playerMgr{

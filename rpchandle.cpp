@@ -25,6 +25,7 @@
 #define RPC_GAME_OverRoom  "OverRoom"
 #define RPC_GAME_OfflineP  "OfflineP"
 #define RPC_GAME_EnterP  "EnterP"
+#define RPC_GAME_LeaveP  "LeaveP"
 #define RPC_GAME_Msg2game  "Msg2game"
 #define RPC_GAME_SvrFrameCmd  "SvrFrameCmd"
 #define RPC_GAME_AllPReady  "AllPReady"
@@ -105,6 +106,7 @@ namespace net{
         m_mapHandler[string( RPC_GAME_OverRoom)] = &net::rpcGameHandle::OverRoom;
         m_mapHandler[string( RPC_GAME_OfflineP)] = &net::rpcGameHandle::OfflineP;
         m_mapHandler[string( RPC_GAME_EnterP)] = &net::rpcGameHandle::EnterP;
+        m_mapHandler[string( RPC_GAME_LeaveP )] = &net::rpcGameHandle::LeaveP;
         m_mapHandler[string( RPC_GAME_SvrFrameCmd)] = &net::rpcGameHandle::SvrFrameCmd;
         m_mapHandler[string( RPC_GAME_AllPReady)] = &net::rpcGameHandle::AllPReady;
         m_mapHandler[string( RPC_GAME_Msg2game)] = &net::rpcGameHandle::Msg2game;
@@ -162,7 +164,11 @@ namespace net{
         //assert(pidvec.size() == ridvec.size());
         //assert(campvec.size() == ridvec.size());
 
-        LOG("i: %d j: %d k: %d f: %d\n", i,j,k,f);
+        //for delta
+        unsigned int delta = atoi(svec[2]);
+        room->UpdateDelta(delta);
+
+        //LOG("i: %d j: %d k: %d f: %d\n", i,j,k,f);
         if( j==k && k == f ){
             for(int jj=0;jj<j; jj++){
                 playerObj *p = new playerObj(pidvec[jj], ridvec[jj], room->getRoomid());
@@ -185,7 +191,11 @@ namespace net{
             LOG("[ERROR] OverRoom failed, room is nil roomid: %ld", _obj->getPid() );  
             return 1;
         }
-        p->Over();
+        bool force = false;
+        if( _obj->getMsgid() == 1 ){
+            force = true;
+        }
+        p->Over(force);
         LOG("[INFO] OverRoom succ, roomid: %ld", _obj->getPid() );  
         return 0;
     }
@@ -197,6 +207,24 @@ namespace net{
         }
         p->Offline();
         LOG("[INFO] Offlinep succ, rid: %ld", _obj->getPid() );  
+        return 0;
+    }
+
+    int rpcGameHandle::LeaveP(rpcObj* _obj){ 
+        playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
+        if(!p){
+            LOG("[ERROR] LeaveP failed, player is nil rid: %ld", _obj->getPid() );  
+            return 1;
+        }
+
+        roomObj *room = roomMgr::m_inst->GetRoom( p->getRoomid());
+        if(!room){
+            LOG("[ERROR] LeaveP failed, room is nil roomid: %d pid: %d rid: %ld ", p->getRoomid(), p->getpid(), p->getRid());
+            return -1;
+        }
+
+        room->LeaveP( p );
+        LOG("[INFO] LeaveP succ, rid: %ld roomid: %d", _obj->getPid(), p->getRoomid() );  
         return 0;
     }
 
@@ -253,6 +281,7 @@ namespace net{
         return 0;
     }
 
+    //process kcp request
     void rpcGameHandle::process(msgObj* obj, int pid, int sessid){
         LOG("[ERROR] rpcGameHandle::process msgid: %d", obj->getMsgid());
         if(obj->getMsgid()==2000){
@@ -325,6 +354,26 @@ namespace net{
     }
     int rpcGameHandle::Api_2003(rpcObj* _obj){ 
         LOG("called Api_2003");  
+        playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
+        if(!p){
+            LOG("[ERROR] Api_2003 failed, player is nil rid: %ld", _obj->getPid() );  
+            return 1;
+        }
+        roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
+        if(!r){
+            p->sendComRetMsg(2003,1);
+            return 1;
+        }
+        if(r->IsOver()){
+            p->sendComRetMsg(2003,2);
+            return 2;
+        }
+        C2SGetSyncCacheFrames_2003 *pmsg = (C2SGetSyncCacheFrames_2003 *)&C2SGetSyncCacheFrames_2003::default_instance();
+        string val((char*)_obj->getBodyPtr(), _obj->getBodylen());
+        istringstream is(val);
+        pmsg->ParseFromIstream(&is);
+        r->GetCacheFrames(p, pmsg->beginframeid());
+        LOG("called Api_2003 rid: %d roomid: %d beginid: %d",p->getRid(), r->getRoomid(), pmsg->beginframeid() );  
         return 0;
     }
     int rpcGameHandle::Api_2004(rpcObj* _obj){ 
@@ -362,6 +411,7 @@ namespace net{
         return 0;
     }
 
+    //process net\gate rpc request
     void rpcGameHandle::process(rpcObj* pobj){
         map<string,PTRFUN>::iterator it ;
         const char* ptar = (const char*)pobj->getTarget();
@@ -379,3 +429,22 @@ namespace net{
     }
 
 }
+/*
+
+    if room == nil {
+        this.sendPlayerComRet(pid, msgId, 1)
+        return
+    }
+    if room.IsOver() {
+        this.sendPlayerComRet(pid, msgId, 2)
+        return
+    }
+
+    delayTime := uint32(0)
+    if p.IsWatcher() {
+        delayTime = p.WatchDelayTime
+    }
+
+    smsg := room.GetCacheFrames(msg.BeginFrameId, delayTime)
+    p.SendMsg(msgId, smsg)
+   */

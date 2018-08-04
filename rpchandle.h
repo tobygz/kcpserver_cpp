@@ -50,6 +50,7 @@ namespace net{
         int OverRoom(rpcObj*);
         int OfflineP(rpcObj*);
         int EnterP(rpcObj*);
+        int LeaveP(rpcObj*);
         int SvrFrameCmd(rpcObj*);
         int AllPReady(rpcObj*);
 

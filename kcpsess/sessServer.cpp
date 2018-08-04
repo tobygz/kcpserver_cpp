@@ -239,6 +239,17 @@ void KCPServer::sendMsg(int sessid, unsigned char* pbuff, int size){
     it1->second->Write( (const char*)pbuff, size );
 }
 
+void KCPServer::closeConn(int sessid){
+    pthread_mutex_lock(mutex);
+    UDPConn *pconn = rawGetConn(sessid);
+    if(!pconn){
+        pthread_mutex_unlock(mutex);
+        return;
+    }
+    pthread_mutex_unlock(mutex);
+    delConn(pconn->getfd());
+}
+
 void KCPServer::delConn(int fd){
     pthread_mutex_lock(mutex);
     map<int,UDPConn*>::iterator it = m_mapConn.find(fd);
@@ -250,7 +261,7 @@ void KCPServer::delConn(int fd){
     p->Close();
     m_mapConn.erase(it);
     m_mapSessFd.erase( p->getpid() );
-    printf("delConn clifd: %d pid: %d len: %d\n", p->getfd(), p->getpid());
+    LOG("delConn clifd: %d pid: %d len: %d\n", p->getfd(), p->getpid());
     delete p;
     pthread_mutex_unlock(mutex);
 }
@@ -509,7 +520,7 @@ UDPConn* KCPServer::rawGetConn(int sessid){
 }
 
 
-//called outside
+//called  mainloop
 void KCPServer::Update(unsigned int ms){
 
     ms = iclock();

@@ -131,6 +131,7 @@ namespace net{
 
         p = rawGetConnByPid(iter->second);
         if(!p){
+            pthread_mutex_unlock(mutex);
             return;
         }
 

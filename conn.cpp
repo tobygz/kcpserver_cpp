@@ -103,7 +103,7 @@ namespace net{
             assert(m_sendBufOffset>=0&&m_sendBufOffset<=BUFFER_SIZE);
             assert(m_sendBufLen>=0&&m_sendBufLen<=BUFFER_SIZE);
             m_sendBufOffset += s;
-            //LOG("connObj::send pid: %d  s: %d m_sendBufOffset: %d m_sendBufLen: %d", m_pid, s, m_sendBufOffset, m_sendBufLen );
+            LOG("connObj::send pid: %d  s: %d m_sendBufOffset: %d m_sendBufLen: %d", m_pid, s, m_sendBufOffset, m_sendBufLen );
             if(m_sendBufOffset >= m_sendBufLen){
                 //chkmem();
                 if( !isGame() && !isNet() ){

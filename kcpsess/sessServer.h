@@ -81,6 +81,7 @@ class KCPServer {
         UDPConn* createConn(int clifd, char* hbuf,int len); 
         int getServFd(){return m_servFd;}
         void delConn(int fd);
+        void closeConn(int sessid);
         UDPConn* rawGetConn(int sessid);
         void markRead(UDPConn*);
         pthread_t Listen(const int lport);
