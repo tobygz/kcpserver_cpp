@@ -1,0 +1,11 @@
+cmake_minimum_required(VERSION 2.8.7)
+project(cpp_server)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ")
+#set(CMAKE_EXE_LINKER_FLAGS " -lpthread -lprotobuf -L./lib")
+
+set(MAIN_TEST main.cpp)
+set(SOURCE_FILES cfg.cpp conn.cpp connmgr.cpp log.cpp main.cpp net.cpp qps.cpp recvBuff.cpp rpchandle.cpp tcpclient.cpp ./kcpsess/ikcp.c ./kcpsess/sessServer.cpp ./core/room.cpp ./core/player.cpp ./core/pb/login.pb.cc ./core/pb/server.pb.cc)
+add_executable(cpp_server ${SOURCE_FILES} ${MAIN_TEST})
+target_link_libraries(cpp_server pthread)
+target_link_libraries(cpp_server "libprotobuf.a")

@@ -411,7 +411,7 @@ namespace net{
         return 0;
     }
 
-    //process net\gate rpc request
+    //process net\gate rpc request; from main thread
     void rpcGameHandle::process(rpcObj* pobj){
         map<string,PTRFUN>::iterator it ;
         const char* ptar = (const char*)pobj->getTarget();

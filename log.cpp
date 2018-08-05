@@ -75,7 +75,7 @@ namespace net {
                 logst *st = logQue.front();
                 logQue.pop();
                 fwrite( st->getwpos(), 1, strlen( st->getwpos()) , m_inst->m_fp );
-                printf("%s\n", st->getwpos() );
+                //printf("%s\n", st->getwpos() );
                 fwrite(ln, 1, strlen( ln ), m_inst->m_fp);
                 delete st;
             }

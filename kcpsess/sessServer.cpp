@@ -98,7 +98,6 @@ UDPConn::UDPConn(int fd, int epfd, int pid, char* pbuff, int len){
     m_kcp->stream = 1;
 
     m_kcp->output = out_wrapper;
-    //m_kcp->writelog = writelog;
 
     LOG("==>udpconn init len: %d \n", len);
     if( len != 0 ){
@@ -183,21 +182,6 @@ size_t UDPConn::Write(const char *buf, size_t sz) {
     } else return n;
 }
 
-FILE *fp = NULL;
-void UDPConn::writelog(const char *log, struct IKCPCB *kcp, void *user){
-    if(fp == NULL){
-        fp = fopen("/tmp/kcp.log","w+");
-        if(fp == NULL){
-            printf("write log fail");
-            exit(0);
-        }
-    }
-    int ret = fputs(log, fp );
-    fputs("\r\n", fp);
-    //int ret = fwrite(log, 1, 0, fp);
-    fflush(fp);
-}
-
 int UDPConn::out_wrapper(const char *buf, int len, struct IKCPCB *, void *user) {    
     UDPConn *pcon = static_cast<UDPConn *>(user);
     pcon->output(buf, static_cast<size_t>(len));
@@ -206,7 +190,6 @@ int UDPConn::out_wrapper(const char *buf, int len, struct IKCPCB *, void *user) 
 
 ssize_t UDPConn::output(const void *buffer, size_t length) {
     ssize_t n = send(m_fd, buffer, length, 0);
-    //printf("called UDPConn::output size: %d n: %d\n", length, n );
     return n;
 }
 
@@ -214,11 +197,6 @@ void KCPServer::markRead(UDPConn* pcon){
     if(pcon==NULL){
         return;
     }
-    /*
-       if(pcon->isMarkRead()){
-       return;
-       }
-       */
     pcon->markRead();
     m_readMap[pcon->getpid()] = true;
 }
@@ -273,7 +251,7 @@ UDPConn* KCPServer::createConn(int clifd, char* buf, int len){
     pcon = new UDPConn(clifd, m_epollFd, g_sess_id, buf, len);
     m_mapConn[clifd] = pcon;
     m_mapSessFd[g_sess_id] = clifd;
-    printf("createConn clifd: %d pid: %d len: %d\n", clifd, pcon->getpid(), len);
+    LOG("createConn clifd: %d pid: %d len: %d\n", clifd, pcon->getpid(), len);
     setnonblocking(clifd);
     if( len != 0 ){
         markRead(pcon);
@@ -287,7 +265,7 @@ void KCPServer::processMsg(int clifd){
     pthread_mutex_lock(mutex);
     map<int,UDPConn*>::iterator it = m_mapConn.find(clifd);
     if(it==m_mapConn.end()){
-        printf("processMsg failed clifd not found\n", clifd);
+        LOG("processMsg failed clifd not found\n", clifd);
         pthread_mutex_unlock(mutex);
         return;
     }
@@ -363,7 +341,7 @@ void KCPServer::acceptConn()
 
         //check(ret == 0, "getnameinfo");
 
-        printf("recvfrom client [%s:%s] fd: %d len: %d\n", hbuf, sbuf, clifd, rret );
+        LOG("recvfrom client [%s:%s] fd: %d len: %d\n", hbuf, sbuf, clifd, rret );
         //write(clifd, buf, rret);
 
         createConn( clifd, buf, rret );

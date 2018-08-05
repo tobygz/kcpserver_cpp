@@ -44,6 +44,7 @@ namespace net{
             //for verify
 
         public:
+            ~roomObj();
             roomObj(int roomid);
             void EnterP(playerObj* p);
             void LeaveP(playerObj* p);

@@ -34,6 +34,9 @@ namespace net{
         m_lastMs = 0;
     }
 
+    roomObj::~roomObj(){
+
+    }
     void roomObj::UpdateDelta(unsigned int delta){
         m_frameTick = (delta&0xffff0000) >> 16;
         LOG("UpdateDelta roomid: %d val: %d", m_roomid, m_frameTick );
@@ -64,7 +67,6 @@ namespace net{
 
         if( m_lastMs == 0 ){
             m_lastMs = ms;
-            LOG("roomobj::update ms: %u m_accMs: %d m_lastMs: %d", ms, m_accMs, m_lastMs);
             return 0;
         }
         m_accMs += ms - m_lastMs;
@@ -89,8 +91,6 @@ namespace net{
             m_allOperMap[m_frameId] = msg;
             //broadcast msg
             BroadcastKcp(2001, msg);
-            //delete msg;
-
             m_frameId++;
         }
 
@@ -100,15 +100,14 @@ namespace net{
             if(!p){
                 continue;
             }
-            S2CMatchOver_213 *pmsg = new S2CMatchOver_213;
+            S2CMatchOver_213 *pmsg = (S2CMatchOver_213*)&S2CMatchOver_213::default_instance();
+            pmsg->Clear();
             if(m_frameId>0){
                 pmsg->set_overframeid(m_frameId-1);
             }else{
                 pmsg->set_overframeid(m_frameId);
             }
             p->sendPbMsg(213, pmsg);
-
-            delete pmsg;
             p->Offline();
         }
         m_leaveRidMap.clear();
@@ -123,12 +122,14 @@ namespace net{
 
     void roomObj::GetFramesData(playerObj* p, char* cobj ){
         msgObj* obj = (msgObj*) cobj;
-        C2SGetRepairFrameData_2002 *pmsg = new C2SGetRepairFrameData_2002;
+        C2SGetRepairFrameData_2002 *pmsg = (C2SGetRepairFrameData_2002*)&C2SGetRepairFrameData_2002::default_instance();
+        pmsg->Clear();
         string val((char*)obj->getBodyPtr(), obj->getBodylen());
         istringstream is(val);
         pmsg->ParseFromIstream(&is);
 
-        S2CGetRepairFrameData_2002 *dmsg = new S2CGetRepairFrameData_2002;
+        S2CGetRepairFrameData_2002 *dmsg = (S2CGetRepairFrameData_2002*)&S2CGetRepairFrameData_2002::default_instance();
+        dmsg->Clear();
         for(int i=0; i<pmsg->frameids_size();i++){
             unsigned int fid = pmsg->frameids(i);
             map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.find(fid);
@@ -141,7 +142,6 @@ namespace net{
             tmp->CopyFrom(*it->second);
         }
         p->sendPbKcpMsg(2002, dmsg);
-
     }
 
     void roomObj::GetCacheFrames(playerObj* p, unsigned int beginid ){
@@ -238,7 +238,8 @@ namespace net{
     }
 
     void roomObj::RawOver(){
-        S2CMatchOver_213 *pmsg = new S2CMatchOver_213;
+        S2CMatchOver_213 *pmsg = (S2CMatchOver_213*)&S2CMatchOver_213::default_instance();
+        pmsg->Clear();
         if(m_frameId>0){
             pmsg->set_overframeid(m_frameId-1);
         }else{
@@ -250,6 +251,7 @@ namespace net{
 
         //send record to gate
         G2gAllRoomFrameData *pgmsg = (G2gAllRoomFrameData *)&G2gAllRoomFrameData::default_instance();
+        pgmsg->Clear();
         pgmsg->set_frametime(m_frameTick);
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
             S2CServerFrameUpdate_2001 *ptmp = pgmsg->add_datalist();
@@ -261,6 +263,13 @@ namespace net{
         pgmsg->SerializeToOstream(&m_os);
 
         tcpclientMgr::m_sInst->rpcCallGate((char*)"UpdateFrameData", 0, 0, (unsigned char*)m_os.str().c_str(), m_os.str().size());
+
+        //release msg memory
+        for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
+            delete it->second;
+        }
+        m_allOperMap.clear();
+
 
         for(map<unsigned long long,bool>::iterator it=m_allRidMap.begin(); it!=m_allRidMap.end();it++){
             playerMgr::m_inst->RemoveP(it->first);
