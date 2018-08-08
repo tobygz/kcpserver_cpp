@@ -106,7 +106,7 @@ namespace net{
             LOG("connObj::send pid: %d  s: %d m_sendBufOffset: %d m_sendBufLen: %d", m_pid, s, m_sendBufOffset, m_sendBufLen );
             if(m_sendBufOffset >= m_sendBufLen){
                 //chkmem();
-                if( !isGame() && !isNet() ){
+                if( isNet() ){
                     qpsMgr::g_pQpsMgr->updateQps(3, m_sendBufOffset);
                 }
                 m_sendBufOffset = 0;
@@ -218,7 +218,7 @@ namespace net{
     int connObj::GetFd(){
         return m_fd;
     }
-    void connRpcObj::Update(){
+    void connRpcObj::Update(unsigned int ms){
         OnRead();
         dealSend();
     }
@@ -370,7 +370,10 @@ namespace net{
             assert( rpcObj::chkPt( *pmsgid ) );
 
             msgObj *p = new msgObj(pmsgid, psize, (unsigned char*)(m_NetBuffer+m_ReadOffset+sizeof(int)*2) );
-            qpsMgr::g_pQpsMgr->updateQps(4, p->size());
+
+            if( netServer::g_netServer->isNet() ){
+                qpsMgr::g_pQpsMgr->updateQps(4, p->size());
+            }
             dealMsg(p);
             delete p;
             m_ReadOffset += *psize +sizeof(int)*2;

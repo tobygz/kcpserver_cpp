@@ -87,7 +87,7 @@ namespace net{
 
             void rpcCallNet(char* target, unsigned long long pid, unsigned int msgid, unsigned char* pbyte, unsigned int byteLen);
             int dealSend();  
-            void Update();       
+            void Update(unsigned int);       
     };
 }
 #endif

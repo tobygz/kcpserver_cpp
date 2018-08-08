@@ -30,7 +30,7 @@ namespace net{
     }
 
     //send rpc result to client; called by main thread;
-    void tcpclientMgr::processAllRpcobj(){
+    void tcpclientMgr::processAllRpcobj(unsigned int ms){
         pthread_mutex_lock(mutex);
         queue<int> fdQue;
         for( map<string, int>::iterator it = m_mapTcpClient.begin(); it!=m_mapTcpClient.end(); it++){
@@ -153,9 +153,9 @@ namespace net{
         }
         tcpclient *pconn = it->second;
         pconn->OnClose();
-        m_mapFdTcpClient.erase( it );   
-        m_mapTcpClient.erase( string( pconn->getName() ) );
-        delete pconn;
+        //m_mapFdTcpClient.erase( it );   
+        //m_mapTcpClient.erase( string( pconn->getName() ) );
+        //delete pconn;
         return true;            
     }    
 
@@ -165,7 +165,7 @@ namespace net{
             if(!p){
                 continue;
             }
-            p->OnClose();
+            p->OnClose(true);
         }
     }
 
@@ -187,7 +187,6 @@ namespace net{
         paddr->sin_family = AF_INET;
 
         inet_pton(AF_INET, m_ip, &paddr->sin_addr);
-
         paddr->sin_port = htons(m_port);
         m_pAddr = (char*)paddr;
 
@@ -212,8 +211,6 @@ namespace net{
         LOG("[TCPCLIENT] %s succ connect to server ip: %s:%d",m_name, m_ip, m_port);
 
         make_socket_non_blocking(m_sock);
-        //netServer::g_netServer->epAddFd(m_sock,(char*)m_name);
-
         //send takeproxy
         AppendSend((char*)"TakeProxy", 0, 0, NULL, 0);    
         return 0;
@@ -272,7 +269,12 @@ namespace net{
             m_queRpcObj.push(p);
             pthread_mutex_unlock(mutexRecv);
 
-            qpsMgr::g_pQpsMgr->updateQps(1, 4+bodylen);
+            
+            if(netServer::g_netServer->isNet()){
+                qpsMgr::g_pQpsMgr->updateQps(1, 4+bodylen);
+            }else{
+                qpsMgr::g_pQpsMgr->updateQps(2, 4+bodylen);
+            }
             offset += sizeof(int) + bodylen;
         }
 
@@ -353,10 +355,17 @@ namespace net{
         return 0;
     }
 
-    void tcpclient::OnClose(){
+    void tcpclient::OnClose(bool force){
         //assert(false);
         close(m_sock);
         LOG("[ERROR] fatal error, tcpclient: %s closed ", m_name);
+
+        if(force){
+            return;
+        }
+
+        initSock();
+        doconnect();
     }
 
 }

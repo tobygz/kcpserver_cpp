@@ -7,6 +7,7 @@
 #include "../log.h"
 #include "../kcpsess/sessServer.h"
 #include "../conn.h"
+#include "../qps.h"
 
 
 
@@ -34,48 +35,69 @@ namespace net{
     playerObj::playerObj(int pid, unsigned long long rid, int roomid ){
         m_pid = pid;
         m_rid = rid;
+        m_sessid = 0;
+        m_off = false;
+        m_camp = 2;
         //strcpy(m_acc, acc);
         m_roomid = roomid;
     }
 
     void playerObj::sendComRetMsg(unsigned int msgid, int ret){
-        S2CCommonRet_1000 *pmsg = new S2CCommonRet_1000;
+        S2CCommonRet_1000 *pmsg = (S2CCommonRet_1000 *)&S2CCommonRet_1000::default_instance();
+        pmsg->Clear();
         pmsg->set_ptid(msgid);
         pmsg->set_ret(ret);
         sendPbMsg(msgid, pmsg);
-        delete pmsg;
     }
     void playerObj::sendMsg(unsigned char* pbuff, size_t size, int msgid){
         //call to net
         connRpcObj::m_inst->rpcCallNet((char*)"PushMsg2Client", m_pid, msgid, pbuff, size);
-        LOG("playerMgr::sendMsg pid: %d rid: %ld, size: %d", m_pid, m_rid, size);
     }
     void playerObj::sendPbMsg(unsigned int msgid, ::google::protobuf::Message* pmsg){
         m_os.str("");
+        int bsize = pmsg->ByteSize();
+        unsigned char* p = (unsigned char*) &bsize;
+        m_os << *(p+0);
+        m_os << *(p+1);
+        m_os << *(p+2);
+        m_os << *(p+3);
+        p = (unsigned char*) &msgid;
+        m_os << *(p+0);
+        m_os << *(p+1);
+        m_os << *(p+2);
+        m_os << *(p+3);
         pmsg->SerializeToOstream(&m_os);
-        int len = m_os.str().size();
-        assert(len+8 <1024);
-        memcpy(m_sendBuf, &len, 4);
-        memcpy(m_sendBuf+4, &msgid, 4);
-        memcpy(m_sendBuf+8, (unsigned char*)m_os.str().c_str(), len );
-        sendMsg((unsigned char*)m_sendBuf, len+8, msgid);
+        sendMsg((unsigned char*)m_os.str().c_str(), bsize+8, msgid);
     }
 
     void playerObj::sendKcpMsg(unsigned char* pbuff, size_t size){
-        LOG("playerObj::sendKcpMsg pid: %d rid: %d sessid: %d size: %d", m_pid, m_rid, m_sessid, size );
-        printBytes(pbuff, size, (char*)"sendKcpMsg");
         //call kcp
         KCPServer::m_sInst->sendMsg(m_sessid, pbuff, size);
+        qpsMgr::g_pQpsMgr->updateQps(3, 1);
     }
     void playerObj::sendPbKcpMsg(unsigned int msgid, ::google::protobuf::Message* pmsg){
-        pmsg->SerializeToOstream(&m_os);
-        int len = m_os.str().size();
-        assert(len+8 <1024);
-        memcpy(m_sendBuf, &len, 4);
-        memcpy(m_sendBuf+4, &msgid, 4);
-        memcpy(m_sendBuf+8, (unsigned char*)m_os.str().c_str(), len );
+        if( m_sessid == 0 ){
+            LOG("playerObj::sendPbKcpMsg pid: %d rid: %d sessid: %d failed for m_sessid is 0", m_pid, m_rid, m_sessid );
+            return;
+        }
+        if( m_off ){
+            return;
+        }
 
-        sendKcpMsg((unsigned char*)m_sendBuf, len+8);
+        m_os.str("");
+        int bsize = pmsg->ByteSize();
+        unsigned char* p = (unsigned char*) &bsize;
+        m_os << *(p+0);
+        m_os << *(p+1);
+        m_os << *(p+2);
+        m_os << *(p+3);
+        p = (unsigned char*) &msgid;
+        m_os << *(p+0);
+        m_os << *(p+1);
+        m_os << *(p+2);
+        m_os << *(p+3);
+        pmsg->SerializeToOstream(&m_os);
+        sendKcpMsg((unsigned char*)m_os.str().c_str(), bsize+8);
     }
 
     void playerObj::Offline(){

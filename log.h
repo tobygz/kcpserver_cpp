@@ -19,6 +19,7 @@ namespace net{
     };
 
     class logger {
+            char m_name[512];
         public:
             FILE* m_fp;
             queue<logst*> m_queueLst;
@@ -26,7 +27,8 @@ namespace net{
             logger(char*);
             static logger* m_inst;
             void AppendLog(logst* p);
-            static void info(const char *format,...);
+            void DoOpen();
+            static void info(const char *format,...) ;
             pthread_t init();
             static void* threadFun( void* param );
     };

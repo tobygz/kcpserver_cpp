@@ -171,7 +171,7 @@ namespace net{
         m_writeFdMap[fd] = p->GetPid();
     }
 
-    void connObjMgr::processAllWrite(){
+    void connObjMgr::processAllWrite(unsigned int ms){
         pthread_mutex_lock(mutex);
         for(map<int,int>::iterator iter = m_writeFdMap.begin(); iter!=m_writeFdMap.end(); /*iter++*/){
             connObj* p = rawGetConnByPid(iter->second);

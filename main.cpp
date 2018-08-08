@@ -11,6 +11,7 @@
 #include "cfg.h"
 #include "log.h"
 #include "conn.h"
+#include "qps.h"
 #include "./core/room.h"
 #include "./kcpsess/sessServer.h"
 
@@ -55,11 +56,13 @@ int main(int argc, char*argv[]){
         pthread_t rpcid_r = InitRpcThread(true);
         pthread_t rpcid_w = InitRpcThread(false);
 
+        unsigned int ms = net::currentMs();
         while(1){
             if(!netServer::g_run){
                 break;
             }
-            netServer::g_netServer->queueProcessFun();
+            ms = net::currentMs();
+            netServer::g_netServer->queueProcessFun(ms);
             usleep(1000);
         }
 
@@ -92,21 +95,27 @@ int main(int argc, char*argv[]){
         pthread_t rpcid_w = InitRpcThread(false);
 
         unsigned int ms = net::currentMs();
+        unsigned int lastMs = ms;
         while(1){
             if(!netServer::g_run){
                 break;
             }
             ms = net::currentMs();
-            netServer::g_netServer->queueProcessFun();
-            //process kcp datas
-            if(connRpcObj::m_inst){
-                //net->game
-                connRpcObj::m_inst->Update();
+            if(ms-lastMs>3){
+                netServer::g_netServer->queueProcessFun(ms);
+                if(connRpcObj::m_inst){
+                    //net->game
+                    connRpcObj::m_inst->Update(ms);
+                }
+                lastMs = ms;
+                //process kcp datas
+                KCPServer::m_sInst->Update(ms);        
             }
-            KCPServer::m_sInst->Update(ms);        
             roomMgr::m_inst->Update(ms);
 
-            usleep(20*1000);
+            qpsMgr::g_pQpsMgr->updateQps(1, 1);
+            //usleep(20*1000);
+            usleep(20);
         }
 
         if(KCPServer::m_sInst){

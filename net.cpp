@@ -279,7 +279,7 @@ namespace net{
         return NULL;
     }
 
-    void netServer::queueProcessFun(){
+    void netServer::queueProcessFun(unsigned int ms){
         queue<NET_OP_ST *> queNew;
 
         pthread_mutex_lock(mutex);
@@ -302,7 +302,7 @@ namespace net{
         pthread_mutex_unlock(mutex);
 
         connObjMgr::g_pConnMgr->CreateConnBatch(&queNew, m_bNet);
-        qpsMgr::g_pQpsMgr->updateQps(3, m_readFdMap.size());
+        //qpsMgr::g_pQpsMgr->updateQps(3, m_readFdMap.size());
 
         queue<int> delLst;
         //process all read event
@@ -326,8 +326,8 @@ namespace net{
         }
 
         //process all write event
-        connObjMgr::g_pConnMgr->processAllWrite();
-        tcpclientMgr::m_sInst->processAllRpcobj();
+        connObjMgr::g_pConnMgr->processAllWrite(ms);
+        tcpclientMgr::m_sInst->processAllRpcobj(ms);
 
         qpsMgr::g_pQpsMgr->dumpQpsInfo();
         //connObjMgr::g_pConnMgr->ChkConnTimeout();

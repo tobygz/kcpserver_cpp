@@ -14,10 +14,14 @@
 #include "../recvBuff.h"
 #include "../log.h"
 #include "../rpchandle.h"
+#include "../qps.h"
+#include "../net.h"
 
 
 #define IKCP_OVERHEAD 24
 #define MAXEVENT 64
+#define KCP_CONN_TIMEOUT_MS 1000*10 //10s
+#define KCP_CONN_TIMEOUT_FREQ_MS 1000*2 //2s
 
 using namespace net;
 
@@ -90,6 +94,7 @@ UDPConn::UDPConn(int fd, int epfd, int pid, char* pbuff, int len){
     m_bRead = false;
     m_pid = pid;
     m_conv = *(int*)pbuff;
+    m_lastTick = 0;
 
     m_kcp = ikcp_create( m_conv, this);
     ikcp_wndsize(m_kcp, 128, 128);
@@ -97,9 +102,12 @@ UDPConn::UDPConn(int fd, int epfd, int pid, char* pbuff, int len){
     ikcp_setmtu(m_kcp, 1400);
     m_kcp->stream = 1;
 
+    mutex = new pthread_mutex_t;
+    pthread_mutex_init( mutex, NULL );
+
     m_kcp->output = out_wrapper;
 
-    LOG("==>udpconn init len: %d \n", len);
+    LOG("udpconn inited fd: %d pid: %d len: %d",fd, pid, len);
     if( len != 0 ){
         ikcp_input(m_kcp, pbuff, len);
     }
@@ -120,16 +128,32 @@ void UDPConn::OnRead(){
         return;
     }
     //int nsend = send(m_fd, m_buf, nread, 0);
-    LOG("UDPConn::OnRead read size: %d errno: %d fd: %d", nread, errno, m_fd);
-    printBytes(m_buf, nread, (char*)"[UDPConn::OnRead]");
+    //LOG("UDPConn::OnRead read size: %d errno: %d fd: %d", nread, errno, m_fd);
+    //printBytes(m_buf, nread, (char*)"[UDPConn::OnRead]");
     ikcp_input(m_kcp, (char *) (m_buf), nread);
     KCPServer::m_sInst->markRead(this);
 }
 
-int UDPConn::OnDealMsg(){
+bool UDPConn::OnCheckTimeout(unsigned int ms){
+    unsigned int lastTick = 0;
+    pthread_mutex_lock(mutex);
+    lastTick = m_lastTick;
+    pthread_mutex_unlock(mutex);
+
+    if( ms - lastTick > KCP_CONN_TIMEOUT_MS ){
+        return true;
+    }
+    return false;
+}
+
+int UDPConn::OnDealMsg(unsigned int ms){
     if(!m_bRead){
         return 0;
     }
+
+    pthread_mutex_lock(mutex);
+    m_lastTick = ms;
+    pthread_mutex_unlock(mutex);
 
     int psz = ikcp_peeksize(m_kcp);
     if (psz <= 0) {
@@ -143,15 +167,9 @@ int UDPConn::OnDealMsg(){
 
     size_t nread = ikcp_recv(m_kcp, (char*)m_cacheBuf+m_offset, int(BUFF_CACHE_SIZE)-m_offset);
     if(nread<0){
-        printf("ikcp_recv nread: %d\n", nread);
+        LOG("ikcp_recv nread: %d\n", nread);
         return nread;
     }
-
-    /*
-       char info[512] = {0};
-       memcpy(info, m_cacheBuf, nread);
-       Write(info, nread);
-       */
 
     unsigned int *bodylen = (unsigned int*)(m_cacheBuf+m_offset);
     if(*bodylen>nread){
@@ -163,14 +181,15 @@ int UDPConn::OnDealMsg(){
     int pid = ppid&0x00000000ffffffff;
     msgObj *pmsg = new msgObj(pmsgid, bodylen, (unsigned char*)(m_cacheBuf+m_offset+16));
     rpcGameHandle::m_pInst->process(pmsg, pid, m_pid);
+    qpsMgr::g_pQpsMgr->updateQps(4, 1);
     delete pmsg;
 
     size_t len = 16 + *bodylen;
     memmove(m_cacheBuf, m_cacheBuf+len, nread-len);
     m_offset += nread - len;
     assert(m_offset == 0 );
-    LOG("ikcp_recv msgid: %d pid: %d roomid: %d bodylen: %d nread: %d m_offset: %d len: %d", *pmsgid, pid, roomid, *bodylen, nread, m_offset, len );
-    printBytes(m_cacheBuf+m_offset+16, *bodylen, (char*)"[ikcp_recv]");
+    //LOG("ikcp_recv msgid: %d pid: %d roomid: %d bodylen: %d nread: %d m_offset: %d len: %d", *pmsgid, pid, roomid, *bodylen, nread, m_offset, len );
+    //printBytes(m_cacheBuf+m_offset+16, *bodylen, (char*)"[ikcp_recv]");
 
     return 0;
 }
@@ -239,7 +258,7 @@ void KCPServer::delConn(int fd){
     p->Close();
     m_mapConn.erase(it);
     m_mapSessFd.erase( p->getpid() );
-    LOG("delConn clifd: %d pid: %d len: %d\n", p->getfd(), p->getpid());
+    LOG("delConn clifd: %d pid: %d len: %d", p->getfd(), p->getpid());
     delete p;
     pthread_mutex_unlock(mutex);
 }
@@ -251,7 +270,7 @@ UDPConn* KCPServer::createConn(int clifd, char* buf, int len){
     pcon = new UDPConn(clifd, m_epollFd, g_sess_id, buf, len);
     m_mapConn[clifd] = pcon;
     m_mapSessFd[g_sess_id] = clifd;
-    LOG("createConn clifd: %d pid: %d len: %d\n", clifd, pcon->getpid(), len);
+    LOG("createConn clifd: %d pid: %d len: %d", clifd, pcon->getpid(), len);
     setnonblocking(clifd);
     if( len != 0 ){
         markRead(pcon);
@@ -265,7 +284,7 @@ void KCPServer::processMsg(int clifd){
     pthread_mutex_lock(mutex);
     map<int,UDPConn*>::iterator it = m_mapConn.find(clifd);
     if(it==m_mapConn.end()){
-        LOG("processMsg failed clifd not found\n", clifd);
+        LOG("processMsg failed clifd not found", clifd);
         pthread_mutex_unlock(mutex);
         return;
     }
@@ -286,15 +305,12 @@ void KCPServer::acceptConn()
             if( rret == 0 && errno == 0 ){
                 continue;
             }
-            printf("format recv from fd: %d ret: %d errno: %d\n", m_servFd, rret, errno );
+            LOG("format recv from fd: %d ret: %d errno: %d", m_servFd, rret, errno );
 
             if( rret < 0){
-                printf("invalied recv from client_addr fd: %d\n", m_servFd);
-                //disconn
+                LOG("invalied recv from client_addr fd: %d", m_servFd);
                 return;
             }
-            //check(ret > 0, "recvfrom error");
-            //
 
             if( rret >0){
                 break;
@@ -302,8 +318,7 @@ void KCPServer::acceptConn()
         }
 
         if( rret < IKCP_OVERHEAD) {
-            printf("invalied format recv from addr: client_addr 11\n");
-            //disconn
+            LOG("invalied format recv from addr: client_addr 11");
             return;
         }
 
@@ -329,7 +344,7 @@ void KCPServer::acceptConn()
         } 
         else
         {
-            printf("IP and port bind success \n");
+            LOG("IP and port bind success ");
         }
         if(clifd==-1){
             perror("fatal eror here");
@@ -339,11 +354,7 @@ void KCPServer::acceptConn()
         connect(clifd,(struct sockaddr*)&client_addr,sizeof(struct sockaddr_in));
         add_event(m_epollFd,clifd,EPOLLIN);
 
-        //check(ret == 0, "getnameinfo");
-
-        LOG("recvfrom client [%s:%s] fd: %d len: %d\n", hbuf, sbuf, clifd, rret );
-        //write(clifd, buf, rret);
-
+        LOG("recvfrom client [%s:%s] fd: %d len: %d", hbuf, sbuf, clifd, rret );
         createConn( clifd, buf, rret );
 
     }
@@ -368,7 +379,9 @@ unsigned long int KCPServer::Listen(const int lport){
     setnonblocking(m_servFd);
 
     if(-1 == bind(m_servFd, (struct sockaddr *)m_pServaddr, sizeof(sockaddr))){
-        printf("error in bind errno: %d\n", errno);
+        LOG("error in bind errno: %d\n", errno);
+        usleep(10000);
+        exit(1);
         return -1;
     }
 
@@ -379,12 +392,12 @@ unsigned long int KCPServer::Listen(const int lport){
     ev.data.fd = m_servFd;
     if (epoll_ctl(m_epollFd, EPOLL_CTL_ADD, m_servFd, &ev) < 0) 
     {
-        printf("epoll set insertion error: fd=%d\n", m_servFd);
+        LOG("epoll set insertion error: fd=%d\n", m_servFd);
         return -1;
     }
     else
     {
-        printf("listen socket added in epoll success :%d sfd: %d epfd: %d\n", lport, m_servFd, m_epollFd);
+        LOG("listen socket added in epoll success: %d sfd: %d epfd: %d", lport, m_servFd, m_epollFd);
     }   
 
     pthread_t id;
@@ -404,6 +417,7 @@ void* KCPServer::epThread(void* param){
 
     int nfds=0,n=0;
     char info[512] = {0};
+    unsigned int ms = net::currentMs();
     while (1) 
     {
 
@@ -424,6 +438,9 @@ void* KCPServer::epThread(void* param){
                 pthis->processMsg(events[n].data.fd);
             }
         }
+
+        ms = net::currentMs();
+        pthis->OnCheckTimeout(ms);
         //printf("epoll_wait ret: %s listenFd: %d\n", info, pthis->m_servFd);
     }
     close(pthis->getEpfd());
@@ -481,6 +498,7 @@ static inline IUINT32 iclock()
 KCPServer::KCPServer(){
     mutex = new pthread_mutex_t;
     pthread_mutex_init( mutex, NULL );
+    m_lastTick = 0;
 }
 
 UDPConn* KCPServer::rawGetConn(int sessid){
@@ -498,10 +516,42 @@ UDPConn* KCPServer::rawGetConn(int sessid){
 }
 
 
+int KCPServer::getCount(){
+    int ret = 0;
+    pthread_mutex_lock(mutex);
+    ret = m_mapConn.size();
+    pthread_mutex_unlock(mutex);
+    return ret;
+}
+
+void KCPServer::OnCheckTimeout(unsigned int ms){
+    queue<int> delQue;
+    pthread_mutex_lock(mutex);
+    if (m_lastTick == 0 ){
+        m_lastTick = ms;
+    }else if(ms-m_lastTick>KCP_CONN_TIMEOUT_FREQ_MS){
+        m_lastTick = ms;
+        //do check timeout
+        for(map<int,UDPConn*>::iterator it=m_mapConn.begin(); it!=m_mapConn.end(); it++){
+            if (it->second->OnCheckTimeout(ms)){
+                delQue.push(it->first);
+            }
+        }
+    }
+    pthread_mutex_unlock(mutex);
+
+    while(!delQue.empty()){
+        int fd = delQue.front();
+        LOG("close timeout kcp conn fd: %d", fd);
+        KCPServer::m_sInst->delConn( fd );
+        delQue.pop();
+    }
+}
+
 //called  mainloop
 void KCPServer::Update(unsigned int ms){
+    //OnCheckTimeout(ms);
 
-    ms = iclock();
     queue<int> delQue;
     //when ms ready
     pthread_mutex_lock(mutex);
@@ -513,7 +563,7 @@ void KCPServer::Update(unsigned int ms){
     for(map<int,bool>::iterator it=m_readMap.begin(); it!= m_readMap.end(); it++ ){
         UDPConn *p = rawGetConn(it->first);
         if(!p){ continue ;}
-        if( p->OnDealMsg() < 0 ){
+        if( p->OnDealMsg(ms) < 0 ){
             //delQue.push(p->getfd());
         }
     }

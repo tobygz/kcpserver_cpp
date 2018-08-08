@@ -31,6 +31,7 @@ namespace net{
             void setRoomid(int val){ m_roomid= val; }
             int getRoomid(){ return m_roomid ; }
             int getpid(){ return m_pid; }
+            int getSessid()const{ return m_sessid; }
             void setSessid(int _id){ 
                 m_sessid = _id; 
                 m_off = false;

@@ -13,7 +13,7 @@
 #include "./pb/server.pb.h"
 #include "../tcpclient.h"
 
-#define FRAME_TICK_MS 33
+#define FRAME_TICK_MS 66
 
 using namespace pb;
 
@@ -32,11 +32,16 @@ namespace net{
         m_startMs = 0;
         m_accMs = 0;
         m_lastMs = 0;
+
+        m_tmpDiff = 0;
+
+        memset(m_buf,0,128);
     }
 
     roomObj::~roomObj(){
 
     }
+
     void roomObj::UpdateDelta(unsigned int delta){
         m_frameTick = (delta&0xffff0000) >> 16;
         LOG("UpdateDelta roomid: %d val: %d", m_roomid, m_frameTick );
@@ -44,7 +49,7 @@ namespace net{
 
     void roomObj::EnterP(playerObj* p){
         m_allRidMap[p->getRid()] = p;
-        LOG("EnterP roomid: %d rid: %d camp: %d", m_roomid, p->getRid(), p->getCamp() );
+        LOG("EnterP roomid: %d rid: %d camp: %d sessid: %d", m_roomid, p->getRid(), p->getCamp(), p->getSessid() );
     }
 
     void roomObj::LeaveP(playerObj* p){
@@ -67,10 +72,14 @@ namespace net{
 
         if( m_lastMs == 0 ){
             m_lastMs = ms;
+            m_tmpDiff = ms;
+            m_accMs = 0;
             return 0;
         }
+
         m_accMs += ms - m_lastMs;
         m_lastMs = ms;
+
         int len = 0;
         while(m_accMs>=m_frameTick){
             m_accMs -= m_frameTick;
@@ -87,7 +96,8 @@ namespace net{
                     ptr->CopyFrom(*pop);
                 }
             }
-            LOG("roomobj::update ms: %u len: %d m_frameId: %d m_accMs: %d", ms, len, m_frameId, m_accMs);
+            LOG("roomobj::update roomid: %d ms: %u len: %d m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, len, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
+            m_tmpDiff = ms;
             m_allOperMap[m_frameId] = msg;
             //broadcast msg
             BroadcastKcp(2001, msg);
@@ -188,16 +198,24 @@ namespace net{
         }
     }
 
-    void roomObj::Broadcast(int msgid, ::google::protobuf::Message* msg){
+    void roomObj::Broadcast(int msgid, ::google::protobuf::Message* pmsg){
         m_os.clear();
         m_os.str("");
-        msg->SerializeToOstream(&m_os);
-        int len = m_os.str().size();
-        memcpy(m_buf, &len, 4);
-        memcpy(m_buf+4, &msgid, 4);
-        memcpy(m_buf+8, (unsigned char*)m_os.str().c_str(), len );
 
-        Broadcast((unsigned char*)m_buf, len+8, msgid);
+        int bsize = pmsg->ByteSize();
+        unsigned char* p = (unsigned char*) &bsize;
+        m_os << *(p+0);
+        m_os << *(p+1);
+        m_os << *(p+2);
+        m_os << *(p+3);
+        p = (unsigned char*) &msgid;
+        m_os << *(p+0);
+        m_os << *(p+1);
+        m_os << *(p+2);
+        m_os << *(p+3);
+        pmsg->SerializeToOstream(&m_os);
+
+        Broadcast((unsigned char*)m_os.str().c_str(), bsize+8, msgid);
     }
 
     void roomObj::Broadcast(unsigned char* buf, int size, int msgid){
@@ -225,16 +243,23 @@ namespace net{
             player->sendKcpMsg( buf, size );
         }
     }
-    void roomObj::BroadcastKcp(int msgid, ::google::protobuf::Message* msg){
+    void roomObj::BroadcastKcp(int msgid, ::google::protobuf::Message* pmsg){
         m_os.clear();
         m_os.str("");
-        msg->SerializeToOstream(&m_os);
-        int len = m_os.str().size();
-        memcpy(m_buf, &len, 4);
-        memcpy(m_buf+4, &msgid, 4);
-        memcpy(m_buf+8, (unsigned char*)m_os.str().c_str(), len );
 
-        BroadcastKcp((unsigned char*)m_buf, len+8);
+        int bsize = pmsg->ByteSize();
+        unsigned char* p = (unsigned char*) &bsize;
+        m_os << *(p+0);
+        m_os << *(p+1);
+        m_os << *(p+2);
+        m_os << *(p+3);
+        p = (unsigned char*) &msgid;
+        m_os << *(p+0);
+        m_os << *(p+1);
+        m_os << *(p+2);
+        m_os << *(p+3);
+        pmsg->SerializeToOstream(&m_os);
+        BroadcastKcp((unsigned char*)m_os.str().c_str(), bsize+8);
     }
 
     void roomObj::RawOver(){
@@ -283,6 +308,7 @@ namespace net{
     roomMgr::roomMgr(){
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );
+        m_lastMs = 0;
     }
     void roomMgr::_lock(int v){
         //LOG("roomMgr lock v: %d", v );
@@ -321,6 +347,11 @@ namespace net{
     }
 
     void roomMgr::Update(unsigned int ms){
+        if(ms-m_lastMs<1){
+            return;
+        }
+        m_lastMs = ms;
+
         queue<int> dlst;
         _lock(3);
         for(map<int,roomObj*>::iterator it= m_idMap.begin(); it!= m_idMap.end(); it++ ){

@@ -1,1 +1,1 @@
-nohup ./nets game > nohup_game.log &
+./cpp_server game > nohup_game.log

@@ -59,7 +59,7 @@ namespace net{
 
         static bool g_run;
         static void* netThreadFun( void* );
-        void queueProcessFun(); //for clients
+        void queueProcessFun( unsigned int ); //for clients
         char* GetOpType(NET_OP );
 
         void queueProcessRpc(); //for rpc

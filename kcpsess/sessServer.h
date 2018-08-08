@@ -18,6 +18,7 @@ class UDPConn {
     int m_conv;
     int m_fd;
     int m_pid;
+    pthread_mutex_t *mutex ; 
 
     public:
     UDPConn(int fd, int epfd, int pid, char* buf, int len);
@@ -28,6 +29,9 @@ class UDPConn {
     unsigned char m_buf[READ_BUFF_SIZE];
     unsigned char m_cacheBuf[BUFF_CACHE_SIZE];
     unsigned int m_offset;
+
+    //for check timeout
+    unsigned int m_lastTick;
 
     void resetRead(){
         m_bRead = false;
@@ -43,8 +47,9 @@ class UDPConn {
 
     void Close();
     void OnRead();
-    int OnDealMsg();
+    int OnDealMsg(unsigned int);
     void Update(unsigned int ms);
+    bool OnCheckTimeout(unsigned int ms);
     private:
 
     static int out_wrapper(const char *buf, int len, struct IKCPCB *, void *user);
@@ -60,6 +65,8 @@ class KCPServer {
         int m_servFd;
         struct sockaddr_in* m_pServaddr;
 
+        unsigned int m_lastMs;
+
         map<int,UDPConn*> m_mapConn;    //fd->conn
         map<int, int> m_mapSessFd; //sess->fd
         //queue<UDPConn*> m_readQueue;
@@ -73,7 +80,11 @@ class KCPServer {
 
         UDPConn *m_pSelfConn;
 
+        //for checktimeout
+        unsigned int m_lastTick;
+
         map<int,bool> m_epEvtMap;
+        void OnCheckTimeout(unsigned int);
     public:
         KCPServer();
         static long g_sess_id;
@@ -87,6 +98,7 @@ class KCPServer {
         pthread_t Listen(const int lport);
         static void* epThread(void*);
         int getEpfd(){return m_epollFd;}
+        int getCount();
 
         void sendMsg(int sessid, unsigned char*, int size);
 

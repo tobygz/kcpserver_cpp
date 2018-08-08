@@ -31,7 +31,7 @@ namespace net{
         connObj* GetConnByPid(int pid );
         void DelConn(int pid, bool btimeOut=false );
         void destroy();
-        void processAllWrite();
+        void processAllWrite(unsigned int);
         static connObjMgr *g_pConnMgr ;
 
         void SendMsg(unsigned int pid, unsigned char* pmem, unsigned int size);

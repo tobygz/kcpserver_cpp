@@ -1,1 +1,1 @@
-nohup ./nets net> nohup_net.log &
+./cpp_server net> nohup_net.log

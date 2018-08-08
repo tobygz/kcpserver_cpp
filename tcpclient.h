@@ -40,7 +40,7 @@ namespace net{
             static void* readThread(void*);
             static void* writeThread(void*);
 
-            void processAllRpcobj();
+            void processAllRpcobj(unsigned int);
 
             static tcpclientMgr *m_sInst;
 
@@ -85,7 +85,7 @@ namespace net{
         void AppendSend(char* target, unsigned long long pid, unsigned int msgid, unsigned char* pbyte, unsigned int byteLen);
         //int dosend(sendCache*);
 
-        void OnClose();
+        void OnClose(bool force=false);
     };
 }
 

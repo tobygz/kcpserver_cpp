@@ -8,6 +8,7 @@
 
 using namespace std;  
 
+#define MAX_FILE_LEN 1073741824 //1024*1024*1024
 namespace net {
 
     logger* logger::m_inst = NULL;
@@ -25,17 +26,35 @@ namespace net {
     logger::logger(char *name){
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );
+        strcpy(m_name, name );
+        m_fp = NULL;
         //open file
+        DoOpen();
+    }
+
+    void logger::DoOpen(){
+        if(m_fp){
+            fflush(m_fp);
+            fclose(m_fp);
+            m_fp = NULL;
+        }
+
+        time_t t = time(NULL);
+        char tmstr[64] = {0};
+        strftime(tmstr, sizeof(tmstr) - 1, "%Y%m%d_%H%M%S", localtime(&t));
+
         char path[2048] = {0};
         char tmppath[2048] = {0};
         getcwd(tmppath,2048);
-        sprintf(path, "%s/log/%s.log",tmppath, name );
+        sprintf(path, "%s/log/%s_%s.log",tmppath, m_name, tmstr );
         m_fp = fopen(path, "w+");
         if(!m_fp){
             printf("open logger file failed\n");
             return;
         }
+
     }
+
     void logger::AppendLog(logst* p){
         pthread_mutex_lock(mutex);
         m_queueLst.push(p);
@@ -61,6 +80,7 @@ namespace net {
         printf("log threadFun started \n");
         queue<logst*> logQue;
         const char* ln = "\n";
+        unsigned long long ct = 0;
         while(netServer::g_run){
 
             pthread_mutex_lock(m_inst->mutex);
@@ -72,12 +92,17 @@ namespace net {
             pthread_mutex_unlock(m_inst->mutex);
 
             while(!logQue.empty()){
+                ct++;
                 logst *st = logQue.front();
                 logQue.pop();
                 fwrite( st->getwpos(), 1, strlen( st->getwpos()) , m_inst->m_fp );
                 //printf("%s\n", st->getwpos() );
                 fwrite(ln, 1, strlen( ln ), m_inst->m_fp);
                 delete st;
+            }
+            if( ct > MAX_FILE_LEN ){
+                m_inst->DoOpen();
+                ct = 0;
             }
 
             usleep(1000);

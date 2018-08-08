@@ -25,6 +25,7 @@ namespace net{
             istringstream m_is;
 
             unsigned char m_buf[128];
+
             //runtime vars
             unsigned int m_endFrameId;
             bool m_brun;
@@ -32,6 +33,8 @@ namespace net{
             unsigned int m_startMs;
             unsigned int m_lastMs;
             unsigned int m_accMs; //ÀÛ»ýms
+
+            unsigned int m_tmpDiff;
 
             unsigned int m_frameTick;
             bool m_gateOver;
@@ -48,7 +51,7 @@ namespace net{
             roomObj(int roomid);
             void EnterP(playerObj* p);
             void LeaveP(playerObj* p);
-            int Update(unsigned int ms);
+            int  Update(unsigned int ms);
             void FrameCmd(playerObj* p, char* );
             void GetFramesData(playerObj* p, char* );
 
@@ -73,6 +76,7 @@ namespace net{
             map<int,roomObj*> m_idMap;
             pthread_mutex_t *mutex ; 
             ostringstream m_os;
+            unsigned int m_lastMs;
         public:
             static roomMgr* m_inst;
             roomMgr();

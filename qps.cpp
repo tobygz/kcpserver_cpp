@@ -5,7 +5,10 @@
 #include <string.h>
 #include <sys/time.h>
 #include "connmgr.h"
+
 #include "log.h"
+#include "net.h"
+#include "./kcpsess/sessServer.h"
 
 using namespace std;
 namespace net{
@@ -36,10 +39,17 @@ namespace net{
         //addQps(2,(char*)"mainloop");//for mainloop
         //addQps(3,(char*)"readfd");//for readfd
         //addQps(4,(char*)"dealrecv");//for recvBuff process
-        addQps(1,(char*)"rpcRecv");
-        addQps(2,(char*)"rpcSend");
-        addQps(3,(char*)"cliSend");
-        addQps(4,(char*)"cliRecv");
+        if( netServer::g_netServer->isNet() ){
+            addQps(1,(char*)"rpcRecv");
+            addQps(2,(char*)"rpcSend");
+            addQps(3,(char*)"cliSend");
+            addQps(4,(char*)"cliRecv");
+        }else{
+            addQps(1,(char*)"mainCt");
+            addQps(2,(char*)"rpcTps");
+            addQps(3,(char*)"kcpSend");
+            addQps(4,(char*)"kcpRecv");
+        }
     }
 
     void qpsMgr::updateQps(int id, int _size){
@@ -78,7 +88,11 @@ namespace net{
             }
             tmp->Reset();
         }
-        sprintf(m_debugInfo, "%s [online: %d]", m_debugInfo, connObjMgr::g_pConnMgr->GetOnline());
+        if( netServer::g_netServer->isNet() ){
+            sprintf(m_debugInfo, "%s [online: %d]", m_debugInfo, connObjMgr::g_pConnMgr->GetOnline());
+        }else{
+            sprintf(m_debugInfo, "%s [online: %d]", m_debugInfo, KCPServer::m_sInst->getCount());
+        }
 
         pthread_mutex_unlock(mutexQps);
         LOG("[QPS]: %s", m_debugInfo );

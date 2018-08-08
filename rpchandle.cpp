@@ -124,7 +124,7 @@ namespace net{
     int rpcGameHandle::NewRoom(rpcObj* _obj){ 
         roomObj *room = new roomObj( int( _obj->getPid()) );
         string binstr((char*)_obj->getBodyPtr(), _obj->getBodylen());
-        LOG("[NEWROOM] binstr: %s\n", binstr.c_str());
+        LOG("[NEWROOM] binstr: %s", binstr.c_str());
         const int p_size=16;
         char *svec[16];
         //vector<char*> svec(p_size);
@@ -168,6 +168,7 @@ namespace net{
         unsigned int delta = atoi(svec[2]);
         room->UpdateDelta(delta);
 
+        //LOG("i: %d j: %d k: %d f: %d\n", i,j,k,f);
         //LOG("i: %d j: %d k: %d f: %d\n", i,j,k,f);
         if( j==k && k == f ){
             for(int jj=0;jj<j; jj++){
@@ -283,7 +284,9 @@ namespace net{
 
     //process kcp request
     void rpcGameHandle::process(msgObj* obj, int pid, int sessid){
-        LOG("[ERROR] rpcGameHandle::process msgid: %d", obj->getMsgid());
+        if( obj->getMsgid() != 2000 ){
+            LOG("[ERROR] rpcGameHandle::process msgid: %d", obj->getMsgid());
+        }
         if(obj->getMsgid()==2000){
             //process 2000
             playerObj *p = playerMgr::m_inst->GetP( pid );
@@ -316,12 +319,12 @@ namespace net{
             //process 2002
             playerObj *p = playerMgr::m_inst->GetP( pid );
             if(!p){
-                LOG("[ERROR] Api_2004 failed, player is nil rid: %ld", pid );
+                LOG("[ERROR] Api_2002 failed, player is nil rid: %ld", pid );
                 return ;
             }
             roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
             if(!r){
-                LOG("[ERROR] Api_2004 failed, room is nil roomid: %ld", p->getRoomid()); 
+                LOG("[ERROR] Api_2002 failed, room is nil roomid: %ld", p->getRoomid()); 
                 return ;
             }
             r->GetFramesData( p,(char*) obj );
@@ -429,22 +432,4 @@ namespace net{
     }
 
 }
-/*
 
-    if room == nil {
-        this.sendPlayerComRet(pid, msgId, 1)
-        return
-    }
-    if room.IsOver() {
-        this.sendPlayerComRet(pid, msgId, 2)
-        return
-    }
-
-    delayTime := uint32(0)
-    if p.IsWatcher() {
-        delayTime = p.WatchDelayTime
-    }
-
-    smsg := room.GetCacheFrames(msg.BeginFrameId, delayTime)
-    p.SendMsg(msgId, smsg)
-   */
