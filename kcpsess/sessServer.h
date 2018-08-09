@@ -7,10 +7,13 @@
 #include <map>
 #include <queue>
 
+#include "../recvBuff.h"
+
 #define READ_BUFF_SIZE 4*1024
 #define BUFF_CACHE_SIZE 16*1024
 
 using namespace std;
+using namespace net;
 
 class UDPConn {
     ikcpcb *m_kcp;
@@ -47,7 +50,7 @@ class UDPConn {
 
     void Close();
     void OnRead();
-    int OnDealMsg(unsigned int);
+    int OnDealMsg(unsigned int, msgObj *);
     void Update(unsigned int ms);
     bool OnCheckTimeout(unsigned int ms);
     private:
@@ -82,6 +85,8 @@ class KCPServer {
 
         //for checktimeout
         unsigned int m_lastTick;
+
+        msgObj *m_pMsg;
 
         map<int,bool> m_epEvtMap;
         void OnCheckTimeout(unsigned int);

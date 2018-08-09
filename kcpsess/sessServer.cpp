@@ -49,9 +49,7 @@ void printBytes(unsigned char *val, size_t size, char *str) {
 
 KCPServer* KCPServer::m_sInst = new KCPServer;
 long KCPServer::g_sess_id= 0;
-/*
-   setnonblocking – 设置句柄为非阻塞方式
-   */
+
 int setnonblocking(int sockfd)
 {
     if (fcntl(sockfd, F_SETFL, fcntl(sockfd, F_GETFD, 0)|O_NONBLOCK) == -1) 
@@ -115,8 +113,8 @@ UDPConn::UDPConn(int fd, int epfd, int pid, char* pbuff, int len){
 
 void UDPConn::Close(){
     close(m_fd);
-    printf("udpconn closed pid: %d\n", m_pid);
-    //delete_event(m_epollFd, )
+    delete mutex;
+    LOG("udpconn closed pid: %d\n", m_pid);
 }
 void UDPConn::Update(unsigned int ms){
     ikcp_update(m_kcp, ms);
@@ -146,7 +144,7 @@ bool UDPConn::OnCheckTimeout(unsigned int ms){
     return false;
 }
 
-int UDPConn::OnDealMsg(unsigned int ms){
+int UDPConn::OnDealMsg(unsigned int ms, msgObj* pmsg){
     if(!m_bRead){
         return 0;
     }
@@ -161,7 +159,7 @@ int UDPConn::OnDealMsg(unsigned int ms){
     }
 
     if(psz>BUFF_CACHE_SIZE){
-        printf("invalied OnDealMsg for psz: %d\n", psz);
+        LOG("invalied OnDealMsg for psz: %d\n", psz);
         return -2;
     }
 
@@ -179,10 +177,9 @@ int UDPConn::OnDealMsg(unsigned int ms){
     unsigned long long ppid = *(unsigned long long*)(m_cacheBuf+m_offset+8);
     int roomid = (ppid&0xffffffff00000000) >> 32;
     int pid = ppid&0x00000000ffffffff;
-    msgObj *pmsg = new msgObj(pmsgid, bodylen, (unsigned char*)(m_cacheBuf+m_offset+16));
+    pmsg->init(pmsgid, bodylen, (unsigned char*)(m_cacheBuf+m_offset+16));
     rpcGameHandle::m_pInst->process(pmsg, pid, m_pid);
     qpsMgr::g_pQpsMgr->updateQps(4, 1);
-    delete pmsg;
 
     size_t len = 16 + *bodylen;
     memmove(m_cacheBuf, m_cacheBuf+len, nread-len);
@@ -404,7 +401,8 @@ unsigned long int KCPServer::Listen(const int lport){
     int i,ret;
     ret=pthread_create(&id,NULL, &KCPServer::epThread , KCPServer::m_sInst);
     if(ret!=0){
-        printf ("Create pthread error!\n");
+        LOG("Create pthread error!\n");
+        usleep(100);
         exit (1);
     }
 
@@ -428,7 +426,6 @@ void* KCPServer::epThread(void* param){
         info[0] = 0;
         for (n = 0; n < nfds; ++n)
         {
-            //sprintf(info, "%s; idx: %d -> fd: %d", info, n, events[n].data.fd );
             if (events[n].data.fd == pthis->getServFd()) 
             {   
                 pthis->acceptConn();
@@ -441,7 +438,6 @@ void* KCPServer::epThread(void* param){
 
         ms = net::currentMs();
         pthis->OnCheckTimeout(ms);
-        //printf("epoll_wait ret: %s listenFd: %d\n", info, pthis->m_servFd);
     }
     close(pthis->getEpfd());
 
@@ -499,6 +495,7 @@ KCPServer::KCPServer(){
     mutex = new pthread_mutex_t;
     pthread_mutex_init( mutex, NULL );
     m_lastTick = 0;
+    m_pMsg = new msgObj();
 }
 
 UDPConn* KCPServer::rawGetConn(int sessid){
@@ -563,7 +560,7 @@ void KCPServer::Update(unsigned int ms){
     for(map<int,bool>::iterator it=m_readMap.begin(); it!= m_readMap.end(); it++ ){
         UDPConn *p = rawGetConn(it->first);
         if(!p){ continue ;}
-        if( p->OnDealMsg(ms) < 0 ){
+        if( p->OnDealMsg(ms, m_pMsg) < 0 ){
             //delQue.push(p->getfd());
         }
     }

@@ -60,8 +60,9 @@ namespace net{
     };
 
     class connNetObj : public connObj{
+            msgObj* m_pmsg;
         public:
-            connNetObj(int _fd):connObj(_fd){}
+            connNetObj(int _fd);
             virtual void dealMsg(msgObj *p);
             virtual bool parseBuff();
             virtual bool IsTimeout(int sec);

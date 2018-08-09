@@ -39,7 +39,6 @@ namespace net{
     }
 
     roomObj::~roomObj(){
-
     }
 
     void roomObj::UpdateDelta(unsigned int delta){
@@ -48,7 +47,7 @@ namespace net{
     }
 
     void roomObj::EnterP(playerObj* p){
-        m_allRidMap[p->getRid()] = p;
+        m_allRidMap[p->getRid()] = true;
         LOG("EnterP roomid: %d rid: %d camp: %d sessid: %d", m_roomid, p->getRid(), p->getCamp(), p->getSessid() );
     }
 
@@ -155,7 +154,8 @@ namespace net{
     }
 
     void roomObj::GetCacheFrames(playerObj* p, unsigned int beginid ){
-        S2CGetSyncCacheFrames_2003 *pmsg = new S2CGetSyncCacheFrames_2003;
+        S2CGetSyncCacheFrames_2003 *pmsg = (S2CGetSyncCacheFrames_2003 *)&S2CGetSyncCacheFrames_2003::default_instance();
+        pmsg->Clear();
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin();it!=m_allOperMap.end(); it++){
             if(it->first<beginid){
                 continue;
@@ -272,7 +272,6 @@ namespace net{
         }
         Broadcast(213, pmsg);
         m_brun = false;
-        LOG("RawOver send frameid: %d msg_frameid: %d", m_frameId, pmsg->overframeid());
 
         //send record to gate
         G2gAllRoomFrameData *pgmsg = (G2gAllRoomFrameData *)&G2gAllRoomFrameData::default_instance();
@@ -288,6 +287,7 @@ namespace net{
         pgmsg->SerializeToOstream(&m_os);
 
         tcpclientMgr::m_sInst->rpcCallGate((char*)"UpdateFrameData", 0, 0, (unsigned char*)m_os.str().c_str(), m_os.str().size());
+        LOG("roomid: %d RawOver send frameid: %d bin size: %d", m_roomid, m_frameId, pgmsg->ByteSize());
 
         //release msg memory
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
@@ -299,7 +299,6 @@ namespace net{
         for(map<unsigned long long,bool>::iterator it=m_allRidMap.begin(); it!=m_allRidMap.end();it++){
             playerMgr::m_inst->RemoveP(it->first);
         }
-        //roomMgr::m_inst->DelRoom(m_roomid);
     }
 
 
@@ -311,11 +310,9 @@ namespace net{
         m_lastMs = 0;
     }
     void roomMgr::_lock(int v){
-        //LOG("roomMgr lock v: %d", v );
         pthread_mutex_lock(mutex);
     }
     void roomMgr::_unlock(int v){
-        //LOG("roomMgr unlock v: %d", v );
         pthread_mutex_unlock(mutex);
     }
     void roomMgr::AppendR(roomObj *p){

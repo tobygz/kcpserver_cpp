@@ -19,11 +19,17 @@ namespace net{
     unsigned int sendCache::g_guid = 0;
     /* msgObj */
     unsigned long long g_uid = 0;
-    msgObj::msgObj(unsigned int* msgid, unsigned int* plen, unsigned char* p){
+    msgObj::msgObj(){
         m_uid = g_uid++;
+    }
+    void msgObj::init(unsigned int* msgid, unsigned int* plen, unsigned char* p){
         m_pmsgId = msgid;
         m_pbodyLen = plen;
         m_pBody = p;
+    }
+    msgObj::msgObj(unsigned int* msgid, unsigned int* plen, unsigned char* p){
+        m_uid = g_uid++;
+        init(msgid, plen, p);
     }
     msgObj::~msgObj(){
     }

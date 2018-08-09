@@ -340,6 +340,9 @@ namespace net{
         }
     }
 
+    connNetObj::connNetObj(int _fd):connObj(_fd){
+        m_pmsg = new msgObj;
+    }
     bool connNetObj::parseBuff(){
         if(m_NetOffset!=0){
             m_lastSec = getsec();
@@ -369,13 +372,12 @@ namespace net{
             }
             assert( rpcObj::chkPt( *pmsgid ) );
 
-            msgObj *p = new msgObj(pmsgid, psize, (unsigned char*)(m_NetBuffer+m_ReadOffset+sizeof(int)*2) );
+            m_pmsg->init(pmsgid, psize, (unsigned char*)(m_NetBuffer+m_ReadOffset+sizeof(int)*2) );
 
             if( netServer::g_netServer->isNet() ){
-                qpsMgr::g_pQpsMgr->updateQps(4, p->size());
+                qpsMgr::g_pQpsMgr->updateQps(4, m_pmsg->size());
             }
-            dealMsg(p);
-            delete p;
+            dealMsg(m_pmsg);
             m_ReadOffset += *psize +sizeof(int)*2;
         }
     }

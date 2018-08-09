@@ -24,7 +24,9 @@ namespace net{
         public:
 
         msgObj(unsigned int* msgid, unsigned int* plen, unsigned char* p);
+        msgObj();
         ~msgObj();
+        void init(unsigned int* msgid, unsigned int* plen, unsigned char* p);
         unsigned int getMsgid(){ return *m_pmsgId;}
         unsigned int getBodylen(){ return *m_pbodyLen;}
         unsigned char* getBodyPtr(){return m_pBody;}
