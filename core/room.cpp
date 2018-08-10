@@ -93,6 +93,7 @@ namespace net{
                     C2SFrameCommand_2000 *pop = que->front();
                     que->pop();
                     ptr->CopyFrom(*pop);
+                    roomMgr::m_inst->recyclePt(pop);
                 }
             }
             LOG("roomobj::update roomid: %d ms: %u len: %d m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, len, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
@@ -165,9 +166,10 @@ namespace net{
         }
         p->sendPbMsg(2003, pmsg);
     }
+
     void roomObj::FrameCmd(playerObj* p, char* cobj ){
         msgObj* obj = (msgObj*) cobj;
-        C2SFrameCommand_2000 *pmsg = new C2SFrameCommand_2000;
+        C2SFrameCommand_2000 *pmsg = roomMgr::m_inst->fetchPt();
         string val((char*)obj->getBodyPtr(), obj->getBodylen());
         istringstream is(val);
         pmsg->ParseFromIstream(&is);
@@ -309,6 +311,26 @@ namespace net{
         pthread_mutex_init( mutex, NULL );
         m_lastMs = 0;
     }
+
+    void roomMgr::initObjPool(){
+        for(int i=0; i<POOL_PT_2000_SIZE; i++ ){
+            C2SFrameCommand_2000 *pmsg = new C2SFrameCommand_2000;
+            m_pool.push(pmsg);
+        }
+    }
+    void roomMgr::recyclePt(C2SFrameCommand_2000* pmsg){
+        m_pool.push(pmsg);
+    }
+
+    C2SFrameCommand_2000* roomMgr::fetchPt(){
+        if( m_pool.size() == 0 ){
+            return new C2SFrameCommand_2000;
+        }
+        C2SFrameCommand_2000 *pret = m_pool.front();
+        m_pool.pop();
+        return pret;
+    }
+
     void roomMgr::_lock(int v){
         pthread_mutex_lock(mutex);
     }
@@ -339,6 +361,7 @@ namespace net{
             return ;
         }
         m_idMap.erase(it);
+        delete it->second;
         _unlock(2);
         LOG("roommgr DelRoom roomid: %d", roomid );
     }

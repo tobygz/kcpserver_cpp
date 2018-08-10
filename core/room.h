@@ -11,6 +11,7 @@
 using namespace std;
 using namespace pb;
 
+#define POOL_PT_2000_SIZE 16*10240
 
 namespace net{
 
@@ -77,6 +78,8 @@ namespace net{
             pthread_mutex_t *mutex ; 
             ostringstream m_os;
             unsigned int m_lastMs;
+            queue<C2SFrameCommand_2000 *> m_pool;
+            void initObjPool();
         public:
             static roomMgr* m_inst;
             roomMgr();
@@ -86,6 +89,10 @@ namespace net{
             void Update(unsigned int ms);
             void _lock(int );
             void _unlock(int );
+
+            //pool func
+            C2SFrameCommand_2000* fetchPt();
+            void recyclePt(C2SFrameCommand_2000*);
     };
 
 }
