@@ -38,7 +38,6 @@ namespace net{
         m_sessid = 0;
         m_off = false;
         m_camp = 2;
-        //strcpy(m_acc, acc);
         m_roomid = roomid;
     }
 

@@ -17,8 +17,6 @@ namespace net{
             int m_sessid;
             unsigned long long m_rid;
             int m_roomid;
-            char m_acc[64];
-            unsigned char m_sendBuf[1024];
             bool m_off;
             int m_camp;
             ostringstream m_os;

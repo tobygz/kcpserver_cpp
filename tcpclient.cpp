@@ -173,6 +173,7 @@ namespace net{
         strcpy(m_name, name);
         strcpy(m_ip, ip);
         m_port = port;
+        m_recvOffset = 0;
         m_pSendCache = new sendCache;
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );

@@ -114,6 +114,7 @@ UDPConn::UDPConn(int fd, int epfd, int pid, char* pbuff, int len){
 void UDPConn::Close(){
     close(m_fd);
     delete mutex;
+    ikcp_release(m_kcp);
     LOG("udpconn closed pid: %d\n", m_pid);
 }
 void UDPConn::Update(unsigned int ms){
