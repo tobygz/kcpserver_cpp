@@ -312,7 +312,6 @@ namespace net{
                 LOG("[ERROR] Api_2004 failed, room is nil roomid: %ld", p->getRoomid()); 
                 return ;
             }
-            //todo add fd
             p->setSessid(sessid);
             r->EnterP(p);            
         }else if( obj->getMsgid() == 2002 ){

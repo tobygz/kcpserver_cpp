@@ -20,7 +20,7 @@
 
 #define IKCP_OVERHEAD 24
 #define MAXEVENT 64
-#define KCP_CONN_TIMEOUT_MS 1000*10 //10s
+#define KCP_CONN_TIMEOUT_MS 1000*90 //10s
 #define KCP_CONN_TIMEOUT_FREQ_MS 1000*2 //2s
 
 using namespace net;
@@ -115,7 +115,7 @@ void UDPConn::Close(){
     close(m_fd);
     delete mutex;
     ikcp_release(m_kcp);
-    LOG("udpconn closed pid: %d\n", m_pid);
+    LOG("udpconn closed pid: %d", m_pid);
 }
 void UDPConn::Update(unsigned int ms){
     ikcp_update(m_kcp, ms);
@@ -220,6 +220,9 @@ void KCPServer::markRead(UDPConn* pcon){
 
 //lock outside
 void KCPServer::sendMsg(int sessid, unsigned char* pbuff, int size){
+    if(sessid == 0 ){
+        return;
+    }
     map<int,int>::iterator it = m_mapSessFd.find(sessid);
     if(it==m_mapSessFd.end()){
         LOG("[ERROR] sendMsg failed, sessid: %d size: %d", sessid, size);
@@ -232,6 +235,24 @@ void KCPServer::sendMsg(int sessid, unsigned char* pbuff, int size){
         return;
     } 
     it1->second->Write( (const char*)pbuff, size );
+}
+
+//lock outside
+void KCPServer::rawCloseConn(int sessid){
+    UDPConn *pconn = rawGetConn(sessid);
+    if(!pconn){
+        return;
+    }
+    map<int,UDPConn*>::iterator it = m_mapConn.find(pconn->getfd());
+    if(it==m_mapConn.end()){
+        return;
+    }
+    UDPConn *p = it->second;
+    p->Close();
+    m_mapConn.erase(it);
+    m_mapSessFd.erase( p->getpid() );
+    LOG("instead delConn clifd: %d pid: %d len: %d", p->getfd(), p->getpid());
+    delete p;
 }
 
 void KCPServer::closeConn(int sessid){

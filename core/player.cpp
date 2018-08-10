@@ -41,6 +41,14 @@ namespace net{
         m_roomid = roomid;
     }
 
+    void playerObj::setSessid(int _id){
+        if(m_sessid != 0 ){
+            KCPServer::m_sInst->rawCloseConn(m_sessid);
+        }
+        m_sessid = _id; 
+        m_off = false;
+    }
+
     void playerObj::sendComRetMsg(unsigned int msgid, int ret){
         S2CCommonRet_1000 *pmsg = (S2CCommonRet_1000 *)&S2CCommonRet_1000::default_instance();
         pmsg->Clear();
