@@ -334,6 +334,9 @@ namespace net{
         while(!m_sendCacheQueue.empty()){
             p = m_sendCacheQueue.front();
             m_sendCacheQueue.pop();
+            if(!p){
+                continue;
+            }
             LOG(" send to gate before size: %d limitsize: %d", p->getOffset(), RPC_BUFF_SIZE );
             assert(p->getOffset()<=RPC_BUFF_SIZE);
             if(p->getOffset() == 0){

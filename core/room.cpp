@@ -12,6 +12,7 @@
 #include "../net.h"
 #include "./pb/server.pb.h"
 #include "../tcpclient.h"
+#include "../qps.h"
 
 #define FRAME_TICK_MS 66
 
@@ -265,6 +266,8 @@ namespace net{
     }
 
     void roomObj::RawOver(){
+        struct timeval tm_s, tm_e;
+
         S2CMatchOver_213 *pmsg = (S2CMatchOver_213*)&S2CMatchOver_213::default_instance();
         pmsg->Clear();
         if(m_frameId>0){
@@ -275,6 +278,7 @@ namespace net{
         Broadcast(213, pmsg);
         m_brun = false;
 
+        gettimeofday(&tm_s,NULL);
         //send record to gate
         G2gAllRoomFrameData *pgmsg = (G2gAllRoomFrameData *)&G2gAllRoomFrameData::default_instance();
         pgmsg->Clear();
@@ -286,17 +290,28 @@ namespace net{
 
         m_os.clear();
         m_os.str("");
+
+        gettimeofday(&tm_e, NULL);
+        qpsMgr::g_pQpsMgr->updateQps(5, net::diffTime(tm_e, tm_s));
+
+        gettimeofday(&tm_s,NULL);
         pgmsg->SerializeToOstream(&m_os);
 
+        gettimeofday(&tm_e, NULL);
+        qpsMgr::g_pQpsMgr->updateQps(6, net::diffTime(tm_e, tm_s));
+
+        gettimeofday(&tm_s,NULL);
         tcpclientMgr::m_sInst->rpcCallGate((char*)"UpdateFrameData", 0, 0, (unsigned char*)m_os.str().c_str(), m_os.str().size());
         LOG("roomid: %d RawOver send frameid: %d bin size: %d", m_roomid, m_frameId, pgmsg->ByteSize());
+
+        gettimeofday(&tm_e, NULL);
+        qpsMgr::g_pQpsMgr->updateQps(7, net::diffTime(tm_e, tm_s));
 
         //release msg memory
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
             delete it->second;
         }
         m_allOperMap.clear();
-
 
         for(map<unsigned long long,bool>::iterator it=m_allRidMap.begin(); it!=m_allRidMap.end();it++){
             playerMgr::m_inst->RemoveP(it->first);

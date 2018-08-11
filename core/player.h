@@ -48,6 +48,7 @@ namespace net{
     class playerMgr{
         protected:
             map<unsigned long long,playerObj*> m_ridPMap;
+            map<int, playerObj*> m_pidPMap;
         public:
             static playerMgr* m_inst;
             playerMgr(){}
@@ -57,6 +58,7 @@ namespace net{
             playerObj* GetPByRid(unsigned long long rid);
             playerObj* GetP(int pid);
             void RemoveP(unsigned long long );
+            size_t GetCount(){ return m_ridPMap.size(); }
             //playerObj* GetPByPid(int pid);
             //void RemovePByPid(int pid );
     };

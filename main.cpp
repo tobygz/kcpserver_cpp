@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <signal.h>
 
+#include <sys/time.h>
+
 
 #include "net.h"
 #include "tcpclient.h"
@@ -23,6 +25,7 @@ pthread_t InitNetListen(char* port);
 //for game
 pthread_t InitGameListen(char* port);
 pthread_t InitKcpListen();
+static IINT64 diffTime(timeval te, timeval ts);
 
 void onQuit(int sigval){
     LOG("called onQuit sigval: %d", sigval);
@@ -96,10 +99,12 @@ int main(int argc, char*argv[]){
 
         unsigned int ms = net::currentMs();
         unsigned int lastMs = ms;
+        struct timeval tm_s, tm_e;
         while(1){
             if(!netServer::g_run){
                 break;
             }
+
             ms = net::currentMs();
             if(ms-lastMs>3){
                 netServer::g_netServer->queueProcessFun(ms);
@@ -108,13 +113,14 @@ int main(int argc, char*argv[]){
                     connRpcObj::m_inst->Update(ms);
                 }
                 lastMs = ms;
+
                 //process kcp datas
                 KCPServer::m_sInst->Update(ms);        
             }
             roomMgr::m_inst->Update(ms);
 
             qpsMgr::g_pQpsMgr->updateQps(1, 1);
-            //usleep(20*1000);
+
             usleep(20);
         }
 
@@ -213,4 +219,5 @@ pthread_t InitKcpListen(){
         }
     }
 }
+
 

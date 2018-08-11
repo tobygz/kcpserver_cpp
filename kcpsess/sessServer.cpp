@@ -94,42 +94,52 @@ UDPConn::UDPConn(int fd, int epfd, int pid, char* pbuff, int len){
     m_conv = *(int*)pbuff;
     m_lastTick = 0;
 
+    mutex = new pthread_mutex_t;
+    pthread_mutex_init( mutex, NULL );
+    mutex_kcp = new pthread_mutex_t;
+    pthread_mutex_init( mutex_kcp, NULL );
+
+    pthread_mutex_lock(mutex_kcp);
     m_kcp = ikcp_create( m_conv, this);
     ikcp_wndsize(m_kcp, 128, 128);
     ikcp_nodelay(m_kcp, 1,10,2,1);
     ikcp_setmtu(m_kcp, 1400);
     m_kcp->stream = 1;
-
-    mutex = new pthread_mutex_t;
-    pthread_mutex_init( mutex, NULL );
-
     m_kcp->output = out_wrapper;
 
-    LOG("udpconn inited fd: %d pid: %d len: %d",fd, pid, len);
     if( len != 0 ){
         ikcp_input(m_kcp, pbuff, len);
     }
+    pthread_mutex_unlock(mutex_kcp);
+    LOG("udpconn inited fd: %d pid: %d len: %d",fd, pid, len);
 }
 
 void UDPConn::Close(){
     close(m_fd);
     delete mutex;
+
+    pthread_mutex_lock(mutex_kcp);
     ikcp_release(m_kcp);
+    pthread_mutex_unlock(mutex_kcp);
+
+    delete mutex_kcp;
     LOG("udpconn closed pid: %d", m_pid);
 }
+//called by mainloop
 void UDPConn::Update(unsigned int ms){
+    pthread_mutex_lock(mutex_kcp);
     ikcp_update(m_kcp, ms);
+    pthread_mutex_unlock(mutex_kcp);
 }
+//called by epthread
 void UDPConn::OnRead(){
     int nread = read(m_fd, m_buf, READ_BUFF_SIZE);
     if(nread<=0 && errno!= EAGAIN){
-        //KCPServer::m_sInst->delConn(m_fd);
         return;
     }
-    //int nsend = send(m_fd, m_buf, nread, 0);
-    //LOG("UDPConn::OnRead read size: %d errno: %d fd: %d", nread, errno, m_fd);
-    //printBytes(m_buf, nread, (char*)"[UDPConn::OnRead]");
+    pthread_mutex_lock(mutex_kcp);
     ikcp_input(m_kcp, (char *) (m_buf), nread);
+    pthread_mutex_unlock(mutex_kcp);
     KCPServer::m_sInst->markRead(this);
 }
 
@@ -154,7 +164,10 @@ int UDPConn::OnDealMsg(unsigned int ms, msgObj* pmsg){
     m_lastTick = ms;
     pthread_mutex_unlock(mutex);
 
+    pthread_mutex_lock(mutex_kcp);
     int psz = ikcp_peeksize(m_kcp);
+    pthread_mutex_unlock(mutex_kcp);
+
     if (psz <= 0) {
         return -1;
     }
@@ -164,7 +177,10 @@ int UDPConn::OnDealMsg(unsigned int ms, msgObj* pmsg){
         return -2;
     }
 
+    pthread_mutex_lock(mutex_kcp);
     size_t nread = ikcp_recv(m_kcp, (char*)m_cacheBuf+m_offset, int(BUFF_CACHE_SIZE)-m_offset);
+    pthread_mutex_unlock(mutex_kcp);
+
     if(nread<0){
         LOG("ikcp_recv nread: %d\n", nread);
         return nread;
@@ -179,21 +195,23 @@ int UDPConn::OnDealMsg(unsigned int ms, msgObj* pmsg){
     int roomid = (ppid&0xffffffff00000000) >> 32;
     int pid = ppid&0x00000000ffffffff;
     pmsg->init(pmsgid, bodylen, (unsigned char*)(m_cacheBuf+m_offset+16));
+
     rpcGameHandle::m_pInst->process(pmsg, pid, m_pid);
-    qpsMgr::g_pQpsMgr->updateQps(4, 1);
+
+    qpsMgr::g_pQpsMgr->updateQps(4, *bodylen);
 
     size_t len = 16 + *bodylen;
     memmove(m_cacheBuf, m_cacheBuf+len, nread-len);
     m_offset += nread - len;
     assert(m_offset == 0 );
-    //LOG("ikcp_recv msgid: %d pid: %d roomid: %d bodylen: %d nread: %d m_offset: %d len: %d", *pmsgid, pid, roomid, *bodylen, nread, m_offset, len );
-    //printBytes(m_cacheBuf+m_offset+16, *bodylen, (char*)"[ikcp_recv]");
 
     return 0;
 }
 
 size_t UDPConn::Write(const char *buf, size_t sz) {
+    pthread_mutex_lock(mutex_kcp);
     ssize_t n = ikcp_send(m_kcp, const_cast<char *>(buf), int(sz));
+    pthread_mutex_unlock(mutex_kcp);
     if (n == 0) {
         return sz;
     } else return n;
@@ -223,17 +241,20 @@ void KCPServer::sendMsg(int sessid, unsigned char* pbuff, int size){
     if(sessid == 0 ){
         return;
     }
+    pthread_mutex_lock(mutex);
     map<int,int>::iterator it = m_mapSessFd.find(sessid);
     if(it==m_mapSessFd.end()){
         LOG("[ERROR] sendMsg failed, sessid: %d size: %d", sessid, size);
+        pthread_mutex_unlock(mutex);
         return;
     }  
     map<int,UDPConn*>::iterator it1 = m_mapConn.find(it->second);
     if(it1==m_mapConn.end()){
-        LOG("[ERROR] sendMsg failed, sessid: %d fd: %d size: %d", sessid, it->second, size);
         pthread_mutex_unlock(mutex);
+        LOG("[ERROR] sendMsg failed, sessid: %d fd: %d size: %d", sessid, it->second, size);
         return;
     } 
+    pthread_mutex_unlock(mutex);
     it1->second->Write( (const char*)pbuff, size );
 }
 
@@ -472,47 +493,6 @@ void KCPServer::Destroy(){
     close(m_servFd);
     close(m_epollFd);
 }
-
-static inline void itimeofday(long *sec, long *usec)
-{
-#if defined(__unix)
-    struct timeval time;
-    gettimeofday(&time, NULL);
-    if (sec) *sec = time.tv_sec;
-    if (usec) *usec = time.tv_usec;
-#else
-    static long mode = 0, addsec = 0;
-    BOOL retval;
-    static IINT64 freq = 1;
-    IINT64 qpc;
-    if (mode == 0) {
-        retval = QueryPerformanceFrequency((LARGE_INTEGER*)&freq);
-        freq = (freq == 0)? 1 : freq;
-        retval = QueryPerformanceCounter((LARGE_INTEGER*)&qpc);
-        addsec = (long)time(NULL);
-        addsec = addsec - (long)((qpc / freq) & 0x7fffffff);
-        mode = 1;
-    }
-    retval = QueryPerformanceCounter((LARGE_INTEGER*)&qpc);
-    retval = retval * 2;
-    if (sec) *sec = (long)(qpc / freq) + addsec;
-    if (usec) *usec = (long)((qpc % freq) * 1000000 / freq);
-#endif
-}
-static inline IINT64 iclock64(void)
-{
-    long s, u;
-    IINT64 value;
-    itimeofday(&s, &u);
-    value = ((IINT64)s) * 1000 + (u / 1000);
-    return value;
-}
-
-static inline IUINT32 iclock()
-{
-    return (IUINT32)(iclock64() & 0xfffffffful);
-}
-
 KCPServer::KCPServer(){
     mutex = new pthread_mutex_t;
     pthread_mutex_init( mutex, NULL );
@@ -569,10 +549,8 @@ void KCPServer::OnCheckTimeout(unsigned int ms){
 
 //called  mainloop
 void KCPServer::Update(unsigned int ms){
-    //OnCheckTimeout(ms);
-
-    queue<int> delQue;
     //when ms ready
+
     pthread_mutex_lock(mutex);
     for(map<int,UDPConn*>::iterator it=m_mapConn.begin(); it!=m_mapConn.end(); it++){
         it->second->Update(ms);
@@ -582,15 +560,16 @@ void KCPServer::Update(unsigned int ms){
     for(map<int,bool>::iterator it=m_readMap.begin(); it!= m_readMap.end(); it++ ){
         UDPConn *p = rawGetConn(it->first);
         if(!p){ continue ;}
+
         if( p->OnDealMsg(ms, m_pMsg) < 0 ){
-            //delQue.push(p->getfd());
         }
     }
+
     m_readMap.clear();
     pthread_mutex_unlock(mutex);
-    while(delQue.empty()==false){
-        KCPServer::m_sInst->delConn(delQue.front());
-        delQue.pop();
+    while(!m_insteadFdQue.empty()){
+        KCPServer::m_sInst->delConn(m_insteadFdQue.front());
+        m_insteadFdQue.pop();
     }
 }
 

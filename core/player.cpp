@@ -44,6 +44,7 @@ namespace net{
     void playerObj::setSessid(int _id){
         if(m_sessid != 0 ){
             KCPServer::m_sInst->rawCloseConn(m_sessid);
+            //KCPServer::m_sInst->AppendInsteadFd(m_sessid);
         }
         m_sessid = _id; 
         m_off = false;
@@ -80,7 +81,7 @@ namespace net{
     void playerObj::sendKcpMsg(unsigned char* pbuff, size_t size){
         //call kcp
         KCPServer::m_sInst->sendMsg(m_sessid, pbuff, size);
-        qpsMgr::g_pQpsMgr->updateQps(3, 1);
+        qpsMgr::g_pQpsMgr->updateQps(3, size);
     }
     void playerObj::sendPbKcpMsg(unsigned int msgid, ::google::protobuf::Message* pmsg){
         if( m_sessid == 0 ){
@@ -116,20 +117,20 @@ namespace net{
     //--------------------------------------------------------------------------------
     void playerMgr::AppendP(playerObj* p){
         m_ridPMap[p->getRid()] = p;
+        m_pidPMap[p->getpid()] = p;
+        LOG("playerMgr::AppendP pid: %d rid: %lld, roomid: %d", p->getpid(), p->getRid(), p->getRoomid());
     }
     void playerMgr::AppendP(int pid, unsigned long long rid, char *acc , int roomid ){
         playerObj *p = new playerObj(pid, rid, roomid );
-        m_ridPMap[rid] = p;
-        LOG("playerMgr::AppendP pid: %d rid: %ld, acc: %s roomid: %d", pid, rid, acc ,roomid);
+        AppendP(p);
     }
 
     playerObj* playerMgr::GetP(int pid){
-        for(map<unsigned long long,playerObj*>::iterator it = m_ridPMap.begin(); it!= m_ridPMap.end(); it++ ){
-            if (it->second->getpid() == pid ){
-                return it->second;
-            }
+        map<int,playerObj*>::iterator it = m_pidPMap.find(pid);
+        if( it == m_pidPMap.end()){
+            return NULL;
         }
-        return NULL;
+        return it->second;
     }
     playerObj* playerMgr::GetPByRid(unsigned long long rid){
         map<unsigned long long,playerObj*>::iterator it = m_ridPMap.find(rid);
@@ -146,6 +147,7 @@ namespace net{
         }
         it->second->Offline();
         m_ridPMap.erase(it);
+        m_pidPMap.erase(it->second->getpid());
         delete it->second;
     }
 

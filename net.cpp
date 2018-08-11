@@ -38,6 +38,14 @@ namespace net{
         return (unsigned int)((time.tv_sec * 1000) + (time.tv_usec / 1000));
     }
 
+
+    unsigned long long diffTime(timeval te, timeval ts)
+    {
+        timeval t_res;
+        timersub(&te, &ts, &t_res);
+        return t_res.tv_sec*1000000 + t_res.tv_usec;
+    }
+
     int make_socket_non_blocking (int sfd)
     {
         int flags, s;
@@ -60,7 +68,7 @@ namespace net{
         return 0;
     }
 
-    static int create_and_bind (char *port)
+    int create_and_bind (char *port)
     {
         struct addrinfo hints;
         struct addrinfo *result, *rp;

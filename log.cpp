@@ -14,10 +14,11 @@ namespace net {
     logger* logger::m_inst = NULL;
     logst::logst(){
         memset(mem,0,LOG_SIZE);
-        time_t t = time(NULL);
-        struct tm *ptminfo;
-        strftime(mem, sizeof(mem), "%Y-%m-%d %H:%M:%S",localtime(&t) );
-        sprintf(mem, "%s[%d]: ",mem, t);
+        timeval curTime;
+        gettimeofday(&curTime, NULL);
+        int ms = curTime.tv_usec / 1000;
+        strftime(mem, sizeof(mem), "%Y%m%d %H:%M:%S", localtime(&curTime.tv_sec));
+        sprintf(mem, "%s:%03d ",mem, ms);
     }
     char* logst::getptr(){ return mem + strlen(mem); }
     char* logst::getwpos(){ return mem; }

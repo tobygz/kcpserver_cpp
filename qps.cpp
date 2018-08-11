@@ -9,6 +9,7 @@
 #include "log.h"
 #include "net.h"
 #include "./kcpsess/sessServer.h"
+#include "./core/player.h"
 
 using namespace std;
 namespace net{
@@ -49,6 +50,9 @@ namespace net{
             addQps(2,(char*)"rpcTps");
             addQps(3,(char*)"kcpSend");
             addQps(4,(char*)"kcpRecv");
+            addQps(5,(char*)"m1");
+            addQps(6,(char*)"m2");
+            addQps(7,(char*)"m3");
         }
     }
 
@@ -80,21 +84,29 @@ namespace net{
         float mval=0;
         for( iter=m_qpsMap.begin(); iter!=m_qpsMap.end(); iter++){
             qpsObj* tmp = (qpsObj*) iter->second;
+            
             if(tmp->size>1024*1024){
                 mval = tmp->size/1024/1024.0;
-                sprintf(m_debugInfo, "%s [type: %s count: %d size: %d(%.2f)]", m_debugInfo, tmp->info, tmp->count, tmp->size, mval );
+                sprintf(m_debugInfo, "%s[t:%s c:%d s:%lld(%.2f)]", m_debugInfo, tmp->info, tmp->count, tmp->size, mval );
             }else{
-                sprintf(m_debugInfo, "%s [type: %s count: %d size: %d]", m_debugInfo, tmp->info, tmp->count, tmp->size );
+                sprintf(m_debugInfo, "%s[t:%s c:%d s:%lld]", m_debugInfo, tmp->info, tmp->count, tmp->size );
+                /*
+                if(tmp->size == 0 ){
+                    sprintf(m_debugInfo, "%s[t:%s c:%d]", m_debugInfo, tmp->info, tmp->count );
+                }else{
+                    sprintf(m_debugInfo, "%s[t:%s c:%d s:%lld]", m_debugInfo, tmp->info, tmp->count, tmp->size );
+                }
+                */
             }
             tmp->Reset();
         }
         if( netServer::g_netServer->isNet() ){
             sprintf(m_debugInfo, "%s [online: %d]", m_debugInfo, connObjMgr::g_pConnMgr->GetOnline());
         }else{
-            sprintf(m_debugInfo, "%s [online: %d]", m_debugInfo, KCPServer::m_sInst->getCount());
+            sprintf(m_debugInfo, "%s [online: %d p: %d]", m_debugInfo, KCPServer::m_sInst->getCount(), playerMgr::m_inst->GetCount());
         }
 
         pthread_mutex_unlock(mutexQps);
-        LOG("[QPS]: %s", m_debugInfo );
+        LOG("QPS %s", m_debugInfo );
     }
 }

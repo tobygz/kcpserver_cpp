@@ -21,7 +21,10 @@ class UDPConn {
     int m_conv;
     int m_fd;
     int m_pid;
+    //for timeout
     pthread_mutex_t *mutex ; 
+    //for kcpobj
+    pthread_mutex_t *mutex_kcp;
 
     public:
     UDPConn(int fd, int epfd, int pid, char* buf, int len);
@@ -88,12 +91,18 @@ class KCPServer {
 
         msgObj *m_pMsg;
 
+        queue<int> m_insteadFdQue;
         map<int,bool> m_epEvtMap;
         void OnCheckTimeout(unsigned int);
     public:
         KCPServer();
         static long g_sess_id;
         static KCPServer* m_sInst;
+
+        void AppendInsteadFd( int ssid ){
+            m_insteadFdQue.push(ssid);
+        }
+
         UDPConn* createConn(int clifd, char* hbuf,int len); 
         int getServFd(){return m_servFd;}
         void delConn(int fd);

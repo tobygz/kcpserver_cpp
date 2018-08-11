@@ -30,7 +30,7 @@ namespace net{
 
         std::map<int,qpsObj*> m_qpsMap; 
         long long m_lastMs;
-        char m_debugInfo[1024];
+        char m_debugInfo[4096];
 
         public:
         qpsMgr();

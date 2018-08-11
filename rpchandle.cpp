@@ -12,6 +12,7 @@
 
 #include "./core/player.h"
 #include "./core/room.h"
+#include "qps.h"
 
 //for net
 #define RPC_PING "ping"
@@ -294,11 +295,13 @@ namespace net{
                 LOG("[ERROR] Api_2000 failed, player is nil rid: %ld", pid );
                 return ;
             }
+
             roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
             if(!r){
                 LOG("[ERROR] Api_2000 failed, room is nil roomid: %ld", p->getRoomid()); 
                 return ;
             }
+
             r->FrameCmd(p, (char*)obj);            
         }else if( obj->getMsgid() == 2004 ){
             //process 2004
@@ -334,18 +337,18 @@ namespace net{
 
     int rpcGameHandle::Api_2000(rpcObj* _obj){ 
         /*
-        playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
-        if(!p){
-            LOG("[ERROR] Api_2000 failed, player is nil rid: %ld", _obj->getPid() );  
-            return 1;
-        }
-        roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
-        if(!r){
-            LOG("[ERROR] Api_2000 failed, room is nil roomid: %ld", p->getRoomid()); 
-            return 2;
-        }
-        r->FrameCmd(p, _obj);
-        */
+           playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
+           if(!p){
+           LOG("[ERROR] Api_2000 failed, player is nil rid: %ld", _obj->getPid() );  
+           return 1;
+           }
+           roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
+           if(!r){
+           LOG("[ERROR] Api_2000 failed, room is nil roomid: %ld", p->getRoomid()); 
+           return 2;
+           }
+           r->FrameCmd(p, _obj);
+           */
         LOG("called Api_2000");  
         return 0;
     }
@@ -381,16 +384,16 @@ namespace net{
     int rpcGameHandle::Api_2004(rpcObj* _obj){ 
         LOG("called Api_2004");  
         /*
-        playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
-        if(!p){
-            LOG("[ERROR] Api_2000 failed, player is nil rid: %ld", _obj->getPid() );  
-            return 1;
-        }
-        roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
-        if(!r){
-            LOG("[ERROR] Api_2000 failed, room is nil roomid: %ld", p->getRoomid()); 
-            return 2;
-        }
+           playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
+           if(!p){
+           LOG("[ERROR] Api_2000 failed, player is nil rid: %ld", _obj->getPid() );  
+           return 1;
+           }
+           roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
+           if(!r){
+           LOG("[ERROR] Api_2000 failed, room is nil roomid: %ld", p->getRoomid()); 
+           return 2;
+           }
         //todo add fd
         p->setFd(0);
         r->EnterP(p);

@@ -56,7 +56,7 @@ namespace net{
 
         //from net
         int Msg2game(rpcObj*);
-        int TakeProxy(rpcObj*){}
+        int TakeProxy(rpcObj*){ return 0;}
 
         //from api
         int Api_2000(rpcObj*);

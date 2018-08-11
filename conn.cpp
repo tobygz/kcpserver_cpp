@@ -81,7 +81,6 @@ namespace net{
         size_t s = 0;
         size_t nowSize=0;
         const size_t SEND_SIZE=64*1024;
-        int bret=0;
         while(1){
             if(m_sendBufLen-m_sendBufOffset>SEND_SIZE){
                 nowSize = SEND_SIZE;
@@ -91,12 +90,10 @@ namespace net{
             s = write(m_fd, m_psendBuf+m_sendBufOffset, nowSize);
             if( s == -1 && errno == EAGAIN ){
                 connObjMgr::g_pConnMgr->AddWriteConn(m_fd, this);
-                bret = -1;
                 break;
             }
             if(s==-1&&errno != EAGAIN ){
                 netServer::g_netServer->appendConnClose(m_fd);
-                bret = 0;
                 break;
             }
             assert(s>0&&s<=nowSize);
@@ -105,18 +102,15 @@ namespace net{
             m_sendBufOffset += s;
             LOG("connObj::send pid: %d  s: %d m_sendBufOffset: %d m_sendBufLen: %d", m_pid, s, m_sendBufOffset, m_sendBufLen );
             if(m_sendBufOffset >= m_sendBufLen){
-                //chkmem();
                 if( isNet() ){
                     qpsMgr::g_pQpsMgr->updateQps(3, m_sendBufOffset);
                 }
                 m_sendBufOffset = 0;
                 m_sendBufLen =0;
-                //chkmem();
-                bret = 0;
                 break;
-                //return 0;
             }
         }
+        return 0;
     }
 
 
@@ -182,6 +176,7 @@ namespace net{
             m_NetOffset += count;
             return 4;
         }
+        return 0;
     }
 
     connObj::connObj(int _fd){
@@ -287,12 +282,12 @@ namespace net{
         }
         sendCache *p = NULL;
         int ret = 0;
-        if(m_sendCacheQueue.size()!=0){
-            LOG("deal send size: %d", m_sendCacheQueue.size());
-        }
         while(!m_sendCacheQueue.empty()){
             p = m_sendCacheQueue.front();
             m_sendCacheQueue.pop();
+            if(!p){
+                continue;
+            }
             LOG(" send to gate before size: %d limitsize: %d", p->getOffset(), RPC_BUFF_SIZE );
             assert(p->getOffset()<=RPC_BUFF_SIZE);
             if(p->getOffset() == 0){
@@ -385,7 +380,6 @@ namespace net{
 
     void connNetObj::dealMsg(msgObj *p){
         assert(p);
-        int len = 0;
         unsigned int msgid = 0;
         msgid = p->getMsgid();
         if( msgid >=0 && msgid<1999){
