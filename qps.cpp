@@ -50,9 +50,11 @@ namespace net{
             addQps(2,(char*)"rpcTps");
             addQps(3,(char*)"kcpSend");
             addQps(4,(char*)"kcpRecv");
+            /*
             addQps(5,(char*)"m1");
             addQps(6,(char*)"m2");
             addQps(7,(char*)"m3");
+            */
         }
     }
 
@@ -87,7 +89,7 @@ namespace net{
             
             if(tmp->size>1024*1024){
                 mval = tmp->size/1024/1024.0;
-                sprintf(m_debugInfo, "%s[t:%s c:%d s:%lld(%.2f)]", m_debugInfo, tmp->info, tmp->count, tmp->size, mval );
+                sprintf(m_debugInfo, "%s[t:%s c:%d s:%.2f]", m_debugInfo, tmp->info, tmp->count, mval );
             }else{
                 sprintf(m_debugInfo, "%s[t:%s c:%d s:%lld]", m_debugInfo, tmp->info, tmp->count, tmp->size );
                 /*

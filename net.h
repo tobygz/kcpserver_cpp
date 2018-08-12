@@ -6,6 +6,7 @@
 #include <pthread.h>
 #include <iostream>
 #include <string>
+#include <sys/time.h>
 
 
 using namespace std;
@@ -26,8 +27,9 @@ namespace net{
     };
 
     int make_socket_non_blocking (int sfd);
-    static int create_and_bind (char *port);
+    int create_and_bind (char *port);
     unsigned int currentMs() ;
+    unsigned long long diffTime(timeval te, timeval ts);
 
     class netServer{
         std::queue<NET_OP_ST*> m_netQueue;

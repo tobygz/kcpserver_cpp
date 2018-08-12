@@ -298,7 +298,7 @@ void KCPServer::delConn(int fd){
     p->Close();
     m_mapConn.erase(it);
     m_mapSessFd.erase( p->getpid() );
-    LOG("delConn clifd: %d pid: %d len: %d", p->getfd(), p->getpid());
+    LOG("delConn clifd: %d pid: %d ", p->getfd(), p->getpid());
     delete p;
     pthread_mutex_unlock(mutex);
 }
@@ -339,7 +339,7 @@ void KCPServer::acceptConn()
         bzero(&client_addr, sizeof(client_addr));
         socklen_t addr_size = sizeof(client_addr);
         char buf[1024] = {0};
-        int ret = 0, rret=0;
+        int rret=0;
         while(true){
             rret = recvfrom(m_servFd, buf,1024, 0, (struct sockaddr *)&client_addr, &addr_size);
             if( rret == 0 && errno == 0 ){
@@ -363,10 +363,10 @@ void KCPServer::acceptConn()
         }
 
         char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
-        ret = getnameinfo((struct sockaddr *)&client_addr, addr_size, hbuf, sizeof(hbuf), \
+        getnameinfo((struct sockaddr *)&client_addr, addr_size, hbuf, sizeof(hbuf), \
                 sbuf, sizeof(sbuf), NI_NUMERICHOST | NI_NUMERICSERV);
 
-        struct sockaddr_in my_addr, their_addr;
+        struct sockaddr_in my_addr ;
         int clifd=socket(PF_INET, SOCK_DGRAM, 0);
 
         /*设置socket属性，端口可以重用*/
@@ -441,7 +441,7 @@ unsigned long int KCPServer::Listen(const int lport){
     }   
 
     pthread_t id;
-    int i,ret;
+    int ret;
     ret=pthread_create(&id,NULL, &KCPServer::epThread , KCPServer::m_sInst);
     if(ret!=0){
         LOG("Create pthread error!\n");
@@ -457,7 +457,6 @@ void* KCPServer::epThread(void* param){
     struct epoll_event events[MAXEVENT];
 
     int nfds=0,n=0;
-    char info[512] = {0};
     unsigned int ms = net::currentMs();
     while (1) 
     {
@@ -466,7 +465,6 @@ void* KCPServer::epThread(void* param){
             nfds = epoll_wait(pthis->getEpfd(), events, MAXEVENT, -1);
         }while(nfds<0&&errno == EINTR);
 
-        info[0] = 0;
         for (n = 0; n < nfds; ++n)
         {
             if (events[n].data.fd == pthis->getServFd()) 
@@ -483,6 +481,7 @@ void* KCPServer::epThread(void* param){
         pthis->OnCheckTimeout(ms);
     }
     close(pthis->getEpfd());
+    return NULL;
 
 }
 

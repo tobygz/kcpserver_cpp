@@ -420,7 +420,7 @@ namespace net{
 
         queue<int> delLst;
         //process all read event
-        int fd, ret;
+        int fd ;
         for(map<int,bool>::iterator iter = m_readFdMap.begin(); iter != m_readFdMap.end(); iter++){
             fd = (int) iter->first;
             tcpclient *pconn = tcpclientMgr::m_sInst->getTcpClientByFd(fd);
@@ -428,7 +428,7 @@ namespace net{
                 delLst.push(fd);
                 continue;
             }
-            ret = pconn->OnRead();
+            pconn->OnRead();
             delLst.push(fd);
             pconn->dealReadBuffer();
             pconn->dealSend();

@@ -141,7 +141,6 @@ namespace net{
         //vector<int> pidvec(p_size);
         int pidvec[16];
         int ival=0;
-        unsigned long long lval = 0;
         while(ptk){
             pidvec[j++] = atoi(ptk);
             ptk = strtok(NULL,",");
@@ -270,7 +269,6 @@ namespace net{
         LOG("called Msg2game");  
         //for frame sync
         map<string,PTRFUN>::iterator it ;
-        int msgid = pobj->getMsgid();
         char info[16] = {0};
         sprintf(info, "%d", pobj->getMsgid());
         string key(info);
