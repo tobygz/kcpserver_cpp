@@ -123,7 +123,8 @@ namespace net{
 
 
     int rpcGameHandle::NewRoom(rpcObj* _obj){ 
-        roomObj *room = new roomObj( int( _obj->getPid()) );
+        roomObj *room = roomMgr::m_inst->popRoom(); //new roomObj( int( _obj->getPid()) );
+        room->init( int( _obj->getPid()) );
         string binstr((char*)_obj->getBodyPtr(), _obj->getBodylen());
         LOG("[NEWROOM] binstr: %s", binstr.c_str());
         const int p_size=16;
@@ -168,11 +169,11 @@ namespace net{
         unsigned int delta = atoi(svec[2]);
         room->UpdateDelta(delta);
 
-        //LOG("i: %d j: %d k: %d f: %d\n", i,j,k,f);
-        //LOG("i: %d j: %d k: %d f: %d\n", i,j,k,f);
+        LOG("i: %d j: %d k: %d f: %d", i,j,k,f);
         if( j==k && k == f ){
             for(int jj=0;jj<j; jj++){
-                playerObj *p = new playerObj(pidvec[jj], ridvec[jj], room->getRoomid());
+                playerObj *p = playerMgr::m_inst->popPlayer();
+                p->init(pidvec[jj], ridvec[jj], room->getRoomid());
                 playerMgr::m_inst->AppendP(p);
                 p->setCamp(campvec[jj]);
                 room->EnterP(p);
@@ -180,7 +181,7 @@ namespace net{
             roomMgr::m_inst->AppendR( room );
             LOG("called NewRoom succ, roomid: %d binstr: %s", room->getRoomid(), binstr.c_str());  
         }else{
-            delete room;
+            roomMgr::m_inst->pushRoom( room );
             LOG("[ERROR] called NewRoom failed,roomid: %d binstr: %s",room->getRoomid(), binstr.c_str());  
         }
 

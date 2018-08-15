@@ -187,6 +187,7 @@ namespace net{
         m_sendBufOffset= 0;
         m_sendBufLen = 0;
         m_bChkReadZero = true;
+        m_ReadOffset = 0;
 
         m_bclose = false;
 
@@ -248,7 +249,7 @@ namespace net{
             //assert( rpcObj::chkPt( *pmsgid ) );
             rpcObj* p = new rpcObj();
             p->decodeBuffer(m_NetBuffer+m_ReadOffset);
-            p->ToString();
+            //p->ToString();
             dealRpcMsg(p);
             delete p;
             m_ReadOffset += *psize +sizeof(int);
@@ -337,6 +338,8 @@ namespace net{
 
     connNetObj::connNetObj(int _fd):connObj(_fd){
         m_pmsg = new msgObj;
+        m_ReadOffset = 0;
+        m_NetOffset = 0;
     }
     bool connNetObj::parseBuff(){
         if(m_NetOffset!=0){

@@ -13,6 +13,7 @@ namespace net{
         char mem[LOG_SIZE];
         public:
         logst();
+        void init();
         char* getptr();
         char* getwpos();
         int getcap();
@@ -20,6 +21,12 @@ namespace net{
 
     class logger {
             char m_name[512];
+
+            pthread_mutex_t *mutexPool ; 
+            queue<logst*> m_pool;
+            void initPool();
+            void pushSt(logst*);
+            logst* popSt();
         public:
             FILE* m_fp;
             queue<logst*> m_queueLst;

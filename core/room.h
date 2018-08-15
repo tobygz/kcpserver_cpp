@@ -11,7 +11,6 @@
 using namespace std;
 using namespace pb;
 
-#define POOL_PT_2000_SIZE 16*10240
 
 namespace net{
 
@@ -49,7 +48,8 @@ namespace net{
 
         public:
             ~roomObj();
-            roomObj(int roomid);
+            roomObj(){}
+            void init(int roomid);
             void EnterP(playerObj* p);
             void LeaveP(playerObj* p);
             int  Update(unsigned int ms);
@@ -64,8 +64,8 @@ namespace net{
             void BroadcastKcp(unsigned char*, int size);
             void BroadcastKcp(int msgid, ::google::protobuf::Message*);
             bool IsOver();
-            bool Over(bool force=true);
-            bool SetReady(){ m_brun = true; }
+            void Over(bool force=true);
+            void SetReady();
             void RawOver();
 
             void UpdateDelta(unsigned int );
@@ -87,12 +87,21 @@ namespace net{
             roomObj* GetRoom(int roomid);
             void DelRoom(int roomid);
             void Update(unsigned int ms);
+            int Count();
             void _lock(int );
             void _unlock(int );
+
 
             //pool func
             C2SFrameCommand_2000* fetchPt();
             void recyclePt(C2SFrameCommand_2000*);
+
+        private:
+            queue<roomObj*> m_poolRoom;
+        public:
+            void pushRoom(roomObj*);
+            roomObj* popRoom();
+
     };
 
 }

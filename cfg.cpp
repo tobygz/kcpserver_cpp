@@ -67,7 +67,7 @@ namespace net{
                 }
             }
             if(bskip){
-            ptk = strtok(NULL,"\n");
+                ptk = strtok(NULL,"\n");
                 continue;
             }else{
                 if(ptk&& ptk[0] != '[' && ptk[0] !='#'){

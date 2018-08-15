@@ -3,6 +3,7 @@
 
 #include <map>
 #include <sstream>
+#include <queue>
 #include "./pb/login.pb.h"
 
 using namespace std;
@@ -22,7 +23,8 @@ namespace net{
             ostringstream m_os;
             istringstream m_is;
         public:
-            playerObj(int pid, unsigned long long rid, int roomid );
+            playerObj(){}
+            void init(int pid, unsigned long long rid, int roomid );
             unsigned long long getRid(){return m_rid;}
             void setCamp(int val){ m_camp = val; }
             int getCamp(){ return m_camp;}
@@ -51,7 +53,7 @@ namespace net{
             map<int, playerObj*> m_pidPMap;
         public:
             static playerMgr* m_inst;
-            playerMgr(){}
+            playerMgr();
 
             void AppendP(int pid, unsigned long long rid, char *acc , int roomid );
             void AppendP(playerObj*);
@@ -59,8 +61,13 @@ namespace net{
             playerObj* GetP(int pid);
             void RemoveP(unsigned long long );
             size_t GetCount(){ return m_ridPMap.size(); }
-            //playerObj* GetPByPid(int pid);
-            //void RemovePByPid(int pid );
+            
+        private:
+            queue<playerObj*> m_pool;
+            void initObjPool();
+        public:
+            void pushPlayer(playerObj*);
+            playerObj* popPlayer();
     };
 }
 #endif

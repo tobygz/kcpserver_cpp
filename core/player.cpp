@@ -10,6 +10,7 @@
 #include "../qps.h"
 
 
+#define POOL_PLAYEROBJ 4096
 
 namespace net{
     void printBytes(unsigned char *val, size_t size, char *str) {
@@ -32,7 +33,7 @@ namespace net{
 
     playerMgr* playerMgr::m_inst = new playerMgr;
 
-    playerObj::playerObj(int pid, unsigned long long rid, int roomid ){
+    void playerObj::init(int pid, unsigned long long rid, int roomid ){
         m_pid = pid;
         m_rid = rid;
         m_sessid = 0;
@@ -40,11 +41,10 @@ namespace net{
         m_camp = 2;
         m_roomid = roomid;
     }
-
+    
     void playerObj::setSessid(int _id){
         if(m_sessid != 0 ){
             KCPServer::m_sInst->rawCloseConn(m_sessid);
-            //KCPServer::m_sInst->AppendInsteadFd(m_sessid);
         }
         m_sessid = _id; 
         m_off = false;
@@ -115,13 +115,18 @@ namespace net{
 
     //for mgr
     //--------------------------------------------------------------------------------
+
+    playerMgr::playerMgr(){
+        initObjPool();
+    }
     void playerMgr::AppendP(playerObj* p){
         m_ridPMap[p->getRid()] = p;
         m_pidPMap[p->getpid()] = p;
-        LOG("playerMgr::AppendP pid: %d rid: %lld, roomid: %d", p->getpid(), p->getRid(), p->getRoomid());
+        LOG("playerMgr::AppendP pid: %d rid: %lld, roomid: %d p: %p", p->getpid(), p->getRid(), p->getRoomid(), p);
     }
     void playerMgr::AppendP(int pid, unsigned long long rid, char *acc , int roomid ){
-        playerObj *p = new playerObj(pid, rid, roomid );
+        playerObj *p = popPlayer();//new playerObj(pid, rid, roomid );
+        p->init(pid, rid, roomid);
         AppendP(p);
     }
 
@@ -145,10 +150,34 @@ namespace net{
         if( it == m_ridPMap.end()){
             return ;
         }
-        it->second->Offline();
+        playerObj* p =  it->second;
+        p->Offline();
         m_ridPMap.erase(it);
-        m_pidPMap.erase(it->second->getpid());
-        delete it->second;
+        m_pidPMap.erase(p->getpid());
+        LOG("playerMgr::RemoveP pid: %d rid: %lld, roomid: %d p: %p", p->getpid(), p->getRid(), p->getRoomid(), p);
+        pushPlayer(p);
     }
+
+    void playerMgr::initObjPool(){
+        for(int i=0; i<POOL_PLAYEROBJ; i++){
+            playerObj *p = new playerObj;
+            m_pool.push(p);
+        }
+    }
+    void playerMgr::pushPlayer(playerObj *r){
+        m_pool.push(r);
+    }
+    playerObj* playerMgr::popPlayer(){
+        playerObj *p = NULL;
+        if(m_pool.empty()){
+            p = new playerObj;
+            LOG("!!!!!!!!!! unexpected error, pool playerObj* was recreated");
+        }else{
+            p = m_pool.front();
+            m_pool.pop();
+        }
+        return p;
+    }
+
 
 }

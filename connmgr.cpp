@@ -2,11 +2,13 @@
 #include "connmgr.h"
 #include <pthread.h>
 #include <stdio.h>
+#include <list>
 
 #include "qps.h"
 #include "net.h"
 #include "log.h"
 
+using namespace std;
 
 namespace net{
     connObjMgr* connObjMgr::g_pConnMgr = new connObjMgr;
@@ -46,11 +48,10 @@ namespace net{
     }
 
     void connObjMgr::CreateConnBatch(void* p, bool bNet) {
-        queue<NET_OP_ST *> *pvec = (queue<NET_OP_ST *> *)p;
+        list<NET_OP_ST *> *plist = (list<NET_OP_ST *> *)p;
         pthread_mutex_lock(mutex);
-        while(!pvec->empty()){
-            NET_OP_ST *pst = pvec->front();
-            pvec->pop();
+        for(list<NET_OP_ST *>::iterator it= plist->begin(); it!=plist->end(); it++){
+            NET_OP_ST *pst = *it;
             if(bNet){
                 connNetObj *pconn = new connNetObj(pst->fd);
                 pconn->SetPid(maxSessid++);
@@ -66,9 +67,8 @@ namespace net{
                 m_connFdMap[pst->fd] = connRpcObj::m_inst->GetPid();
                 connRpcObj::m_inst->OnInit( (char*)pst->paddr, bNet );
 
-                LOG("init connRpcObj pst->fd: %d pid: %d addr: %s", pst->fd, connRpcObj::m_inst->GetPid(), pst->paddr );
+                LOG("init connRpcObj pst->fd: %d pid: %d addr: %s connRpcObj::m_inst: %p", pst->fd, connRpcObj::m_inst->GetPid(), pst->paddr, connRpcObj::m_inst );
             }
-            delete pst;
         }
         pthread_mutex_unlock(mutex);
     }

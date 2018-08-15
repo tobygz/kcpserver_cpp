@@ -3,6 +3,8 @@ project(cpp_server)
 
 #SET(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -g -Wall")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O1 -g -Wall -fsanitize=address -fno-omit-frame-pointer")
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -g -Wall -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free")
 #set(CMAKE_EXE_LINKER_FLAGS " -lpthread -lprotobuf -L./lib")
 
 set(MAIN_TEST main.cpp)
@@ -10,4 +12,5 @@ set(SOURCE_FILES cfg.cpp conn.cpp connmgr.cpp log.cpp main.cpp net.cpp qps.cpp r
 add_executable(cpp_server ${SOURCE_FILES} ${MAIN_TEST})
 target_link_libraries(cpp_server pthread)
 #target_link_libraries(cpp_server "libtcmalloc.a")
+#target_link_libraries(cpp_server "libtcmalloc_debug.a")
 target_link_libraries(cpp_server "libprotobuf.a")

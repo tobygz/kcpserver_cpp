@@ -30,6 +30,8 @@ namespace net{
             map<int, tcpclient*> m_mapFdTcpClient;
             tcpclientMgr(); 
             pthread_mutex_t *mutex ;  //for connmgr
+
+            int processDealSend();
         public:
             tcpclient* createTcpclient(char* name, char* ip, int port);
             tcpclient* getTcpClient(const char* name);

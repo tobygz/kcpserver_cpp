@@ -11,6 +11,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <list>
 
 #include "connmgr.h"
 #include "tcpclient.h"
@@ -18,6 +19,7 @@
 #include "log.h"
 
 #define MAXEVENTS 1024
+#define NET_OP_ST_POOL_SIZE 1024 * 128
 
 namespace net{
 
@@ -28,9 +30,45 @@ namespace net{
     netServer::netServer(){
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );
+
+        mutexSt = new pthread_mutex_t;
+        pthread_mutex_init( mutexSt, NULL );
         m_sockfd = -1;
         m_bNet = false;
+
+        initStPool();
     }
+
+    void netServer::pushSt(NET_OP_ST* p){
+        pthread_mutex_lock(mutexSt);
+        memset(p,0,sizeof(NET_OP_ST));
+        m_opStPool.push(p);
+        pthread_mutex_unlock(mutexSt);
+    }
+
+    NET_OP_ST* netServer::popSt(){
+        NET_OP_ST* p = NULL;
+        pthread_mutex_lock(mutexSt);
+        if(m_opStPool.empty()){
+            p = new NET_OP_ST;
+            memset(p, 0, sizeof(NET_OP_ST));
+        }else{
+            p = m_opStPool.front();
+            m_opStPool.pop();
+        }
+        pthread_mutex_unlock(mutexSt);
+        return p;
+    }
+    void netServer::initStPool(){
+        pthread_mutex_lock(mutexSt);
+        for(int i=0;i<NET_OP_ST_POOL_SIZE; i++){
+            NET_OP_ST *p = new NET_OP_ST;
+            memset(p, 0, sizeof(NET_OP_ST));
+            m_opStPool.push(p);
+        }
+        pthread_mutex_unlock(mutexSt);
+    }
+
 
     unsigned int currentMs() {
         struct timeval time;
@@ -77,6 +115,7 @@ namespace net{
 
         //signal
         struct sigaction act;
+        memset(&act,0,sizeof(act));
         act.sa_handler = SIG_IGN;
         sigaction(SIGPIPE, &act, NULL) ;
 
@@ -128,6 +167,8 @@ namespace net{
         connObjMgr::g_pConnMgr->destroy();
         usleep(100000);
         close (m_sockfd);
+        delete mutexSt;
+        delete mutex;
     }
 
     int netServer::initSock(char *port) {
@@ -180,6 +221,7 @@ namespace net{
             }
         }
         struct epoll_event event;
+        memset(&event,0, sizeof(struct epoll_event));
         event.data.fd = fd;
         event.events = EPOLLIN | EPOLLET;
         int s = epoll_ctl (m_epollfd, EPOLL_CTL_ADD, fd, &event);
@@ -288,7 +330,7 @@ namespace net{
     }
 
     void netServer::queueProcessFun(unsigned int ms){
-        queue<NET_OP_ST *> queNew;
+        list<NET_OP_ST *> listNew;
 
         pthread_mutex_lock(mutex);
         while(!this->m_netQueue.empty()){
@@ -298,18 +340,21 @@ namespace net{
                 continue;
             }
             if(pst->op == NEW_CONN){
-                queNew.push(pst);
+                listNew.push_back(pst);
             }else if(pst->op == DATA_IN){
                 m_readFdMap[pst->fd] = true;
-                delete pst;
+                pushSt(pst);
             }else if(pst->op == QUIT_CONN){
                 connObjMgr::g_pConnMgr->DelConn(pst->fd);
-                delete pst;
+                pushSt(pst);
             }
         }
         pthread_mutex_unlock(mutex);
 
-        connObjMgr::g_pConnMgr->CreateConnBatch(&queNew, m_bNet);
+        connObjMgr::g_pConnMgr->CreateConnBatch(&listNew, m_bNet);
+        for(list<NET_OP_ST *>::iterator it= listNew.begin(); it!=listNew.end(); it++){
+            pushSt(*it);
+        }
         //qpsMgr::g_pQpsMgr->updateQps(3, m_readFdMap.size());
 
         queue<int> delLst;
@@ -341,10 +386,17 @@ namespace net{
         //connObjMgr::g_pConnMgr->ChkConnTimeout();
     }
 
-    void netServer::appendSt(NET_OP_ST *pst, bool bmtx){
-        if(bmtx){
-            pthread_mutex_lock(mutex);
+    void netServer::rawAppendSt(NET_OP_ST *pst){
+        if( m_rpcFdMap.find(pst->fd) != m_rpcFdMap.end()){
+            pst->bRpc = true;
+            m_netQueueRpc.push(pst);
+        }else{
+            pst->bRpc = false;
+            m_netQueue.push(pst);
         }
+    }
+    void netServer::appendSt(NET_OP_ST *pst){
+        pthread_mutex_lock(mutex);
         if( m_rpcFdMap.find(pst->fd) != m_rpcFdMap.end()){
             pst->bRpc = true;
             m_netQueueRpc.push(pst);
@@ -353,34 +405,33 @@ namespace net{
             m_netQueue.push(pst);
         }
 
-        if(bmtx){
-            pthread_mutex_unlock(mutex);
-        }
+        pthread_mutex_unlock(mutex);
     }
 
     void netServer::appendDataIn(int fd){
-        NET_OP_ST *pst = new NET_OP_ST();
-        memset(pst,0, sizeof(NET_OP_ST));
+        NET_OP_ST *pst = popSt();
         pst->op = DATA_IN;
         pst->fd = fd;
-        this->appendSt(pst);
+        this->rawAppendSt(pst);
     }
 
     void netServer::appendConnNew(int fd, char *pip, char* pport){
-        NET_OP_ST *pst = new NET_OP_ST();
-        memset(pst,0, sizeof(NET_OP_ST));
+        NET_OP_ST *pst = popSt();
         pst->bRpc = false;
         pst->op = NEW_CONN;
         pst->fd = fd;
         sprintf(pst->paddr, "%s:%s", pip, pport);        
-        this->appendSt(pst);
+        this->rawAppendSt(pst);
     }
     void netServer::appendConnClose(int fd, bool bmtx){
-        NET_OP_ST *pst = new NET_OP_ST();
-        memset(pst,0, sizeof(NET_OP_ST));
+        NET_OP_ST *pst = popSt();
         pst->op = QUIT_CONN;
         pst->fd = fd;
-        this->appendSt(pst, bmtx);
+        if(bmtx){
+            this->appendSt(pst);
+        }else{
+            this->rawAppendSt(pst);
+        }
     }
 
 
@@ -412,7 +463,7 @@ namespace net{
             }else if(pst->op == QUIT_CONN){
                 tcpclientMgr::m_sInst->DelConn(pst->fd);
             }
-            delete pst;
+            pushSt(pst);
         }
         //LOG("called queueProcessRpc m_readFdMap size: %d\n", m_readFdMap.size());
 

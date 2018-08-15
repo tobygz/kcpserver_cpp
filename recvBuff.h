@@ -43,6 +43,8 @@ namespace net{
             unsigned char m_pParam[1024] ;  //end with 0
             unsigned char m_pResult[512] ; //end with 0
 
+            unsigned char m_buff[256];
+
             unsigned char m_pMsgType;
             unsigned long long m_pPid;
             unsigned int m_pMsgid;

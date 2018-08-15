@@ -31,8 +31,8 @@ namespace net{
 
     //send rpc result to client; called by main thread;
     void tcpclientMgr::processAllRpcobj(unsigned int ms){
-        pthread_mutex_lock(mutex);
         queue<int> fdQue;
+        pthread_mutex_lock(mutex);
         for( map<string, int>::iterator it = m_mapTcpClient.begin(); it!=m_mapTcpClient.end(); it++){
             fdQue.push(it->second);
         }
@@ -76,22 +76,8 @@ namespace net{
 
     void* tcpclientMgr::writeThread(void *){
         LOG("tcpclientMgr::writeThread started");
-        queue<int> fdQue;
         while(netServer::g_run){
-            pthread_mutex_lock(m_sInst->mutex);
-            for( map<string, int>::iterator it = m_sInst->m_mapTcpClient.begin(); it!=m_sInst->m_mapTcpClient.end(); it++){
-                fdQue.push(it->second);
-            }
-            pthread_mutex_unlock(m_sInst->mutex);
-            while(!fdQue.empty()){
-                int fd = fdQue.front();
-                fdQue.pop();
-                tcpclient *p = m_sInst->getTcpClientByFd(fd);
-                if(!p){
-                    continue;
-                }
-                p->dealSend();
-            }
+            m_sInst->processDealSend();
             usleep(1000);
         }
         LOG("tcpclientMgr::writeThread quit");
@@ -153,9 +139,6 @@ namespace net{
         }
         tcpclient *pconn = it->second;
         pconn->OnClose();
-        //m_mapFdTcpClient.erase( it );   
-        //m_mapTcpClient.erase( string( pconn->getName() ) );
-        //delete pconn;
         return true;            
     }    
 
@@ -265,7 +248,7 @@ namespace net{
             }
             p = new rpcObj();
             p->decodeBuffer(m_recvBuffer+offset );
-            p->ToString();
+            //p->ToString();
             pthread_mutex_lock(mutexRecv);
             m_queRpcObj.push(p);
             pthread_mutex_unlock(mutexRecv);
@@ -317,6 +300,17 @@ namespace net{
         m_pSendCache->updateOffset(offset);
     }
 
+    int tcpclientMgr::processDealSend(){
+        cautoLock alock(mutex);
+        for( map<int, tcpclient*>::iterator it = m_mapFdTcpClient.begin(); it!=m_mapFdTcpClient.end(); it++){
+            tcpclient *p = it->second;
+            if(!p){
+                continue;
+            }
+            p->dealSend();
+        }
+    }
+
     int tcpclient::dealSend(){
         cautoLock alock(mutex);
         if(m_sendCacheQueue.size() == 0 && m_pSendCache->getOffset() == 0){
@@ -328,9 +322,6 @@ namespace net{
         }
         sendCache *p = NULL;
         int ret = 0;
-        if(m_sendCacheQueue.size()!=0){
-            LOG("deal send size: %d", m_sendCacheQueue.size());
-        }
         while(!m_sendCacheQueue.empty()){
             p = m_sendCacheQueue.front();
             m_sendCacheQueue.pop();

@@ -9,10 +9,14 @@
 using namespace std;  
 
 #define MAX_FILE_LEN 1073741824 //1024*1024*1024
+
+#define LOGST_SIZE 1024*2 //1024*1024*1024
 namespace net {
 
     logger* logger::m_inst = NULL;
-    logst::logst(){
+    logst::logst(){ }
+
+    void logst::init(){
         memset(mem,0,LOG_SIZE);
         timeval curTime;
         gettimeofday(&curTime, NULL);
@@ -27,10 +31,48 @@ namespace net {
     logger::logger(char *name){
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );
+
+        mutexPool = new pthread_mutex_t;
+        pthread_mutex_init( mutexPool, NULL );
+
+        initPool();
         strcpy(m_name, name );
         m_fp = NULL;
         //open file
         DoOpen();
+    }
+
+    void logger::initPool(){
+        pthread_mutex_lock(mutex);
+        for(int i=0; i<LOGST_SIZE; i++){
+            logst *p = new logst;
+            memset(p,0,sizeof(logst));
+            m_pool.push(p);
+        }
+        pthread_mutex_unlock(mutex);
+
+    }
+    void logger::pushSt(logst* p){
+        pthread_mutex_lock(mutex);
+        m_pool.push(p);
+        memset(p,0,sizeof(logst));
+        pthread_mutex_unlock(mutex);
+
+    }
+    logst* logger::popSt(){
+        logst *p = NULL;
+        pthread_mutex_lock(mutex);
+        if(m_pool.size() == 0 ){
+            p = new logst;
+            p->init();
+        }else{
+            p = m_pool.front();
+            p->init();
+            m_pool.pop();
+        }
+        pthread_mutex_unlock(mutex);
+        return p;
+
     }
 
     void logger::DoOpen(){
@@ -64,7 +106,7 @@ namespace net {
 
     void logger::info(const char *format,...)
     {
-        logst *pst = new logst;
+        logst *pst = logger::m_inst->popSt();
         va_list args;
         va_start(args,format);
         vsnprintf(pst->getptr(), pst->getcap(),format,args);
@@ -99,7 +141,7 @@ namespace net {
                 fwrite( st->getwpos(), 1, strlen( st->getwpos()) , m_inst->m_fp );
                 //printf("%s\n", st->getwpos() );
                 fwrite(ln, 1, strlen( ln ), m_inst->m_fp);
-                delete st;
+                logger::m_inst->pushSt(st);
             }
             if( ct > MAX_FILE_LEN ){
                 m_inst->DoOpen();

@@ -16,13 +16,16 @@
 
 #define FRAME_TICK_MS 66
 
+#define POOL_PT_2000_SIZE 1024*1024
+#define POOL_ROOMOBJ 1024
+
 using namespace pb;
 
 namespace net{
 
     roomMgr* roomMgr::m_inst = new roomMgr;
 
-    roomObj::roomObj(int roomid){
+    void roomObj::init(int roomid){
         m_roomid = roomid;
         m_frameTick = FRAME_TICK_MS;
         m_frameId = 0;
@@ -37,6 +40,11 @@ namespace net{
         m_tmpDiff = 0;
 
         memset(m_buf,0,128);
+
+        m_leaveRidMap.clear();
+        m_allOperMap.clear();
+        m_ridOpersMap.clear();
+        m_allRidMap.clear();
     }
 
     roomObj::~roomObj(){
@@ -193,9 +201,9 @@ namespace net{
         return !m_brun;
     }
 
-    bool roomObj::Over(bool force){
+    void roomObj::Over(bool force){
         m_endFrameId = m_frameId;
-        LOG("roomObj::over set frameid: %d", m_frameId );
+        LOG("roomObj::over roomid: %d set frameid: %d",m_roomid, m_frameId );
         if( force ){
             m_gateOver = true;
         }
@@ -265,6 +273,9 @@ namespace net{
         BroadcastKcp((unsigned char*)m_os.str().c_str(), bsize+8);
     }
 
+    void roomObj::SetReady(){
+        m_brun = true;
+    }
     void roomObj::RawOver(){
         struct timeval tm_s, tm_e;
 
@@ -324,26 +335,50 @@ namespace net{
     roomMgr::roomMgr(){
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );
+        initObjPool();
         m_lastMs = 0;
     }
 
+    //pool funcs
     void roomMgr::initObjPool(){
         for(int i=0; i<POOL_PT_2000_SIZE; i++ ){
             C2SFrameCommand_2000 *pmsg = new C2SFrameCommand_2000;
             m_pool.push(pmsg);
         }
+        for(int i=0; i<POOL_ROOMOBJ; i++){
+            roomObj *p = new roomObj;
+            m_poolRoom.push(p);
+        }
     }
-    void roomMgr::recyclePt(C2SFrameCommand_2000* pmsg){
-        m_pool.push(pmsg);
+    void roomMgr::pushRoom(roomObj *r){
+        m_poolRoom.push(r);
+    }
+    roomObj* roomMgr::popRoom(){
+        roomObj *r = NULL;
+        if(m_poolRoom.empty()){
+            r = new roomObj;
+            LOG("!!!!!!!!!! unexpected error, pool roomObj* was recreated");
+        }else{
+            r = m_poolRoom.front();
+            m_poolRoom.pop();
+        }
+        return r;
+    }
+
+    void roomMgr::recyclePt(C2SFrameCommand_2000* p){
+        m_pool.push(p);
     }
 
     C2SFrameCommand_2000* roomMgr::fetchPt(){
+        C2SFrameCommand_2000* pmsg = NULL;
         if( m_pool.size() == 0 ){
-            return new C2SFrameCommand_2000;
+            pmsg = new C2SFrameCommand_2000;
+            LOG("!!!!!!!!!! unexpected error, pool C2SFrameCommand_2000 was recreated");
+        }else{
+            pmsg = m_pool.front();
+            m_pool.pop();
         }
-        C2SFrameCommand_2000 *pret = m_pool.front();
-        m_pool.pop();
-        return pret;
+        return pmsg;
     }
 
     void roomMgr::_lock(int v){
@@ -375,10 +410,19 @@ namespace net{
             _unlock(2);
             return ;
         }
-        m_idMap.erase(it);
-        delete it->second;
+        roomObj* p = it->second;
+        m_idMap.erase(roomid);
+        pushRoom(p);
         _unlock(2);
         LOG("roommgr DelRoom roomid: %d", roomid );
+    }
+
+    int roomMgr::Count(){
+        int size = 0;
+        _lock(5);
+        size = m_idMap.size();
+        _unlock(5);
+        return size;
     }
 
     void roomMgr::Update(unsigned int ms){

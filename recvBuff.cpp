@@ -43,7 +43,7 @@ namespace net{
     }
     
     rpcObj::~rpcObj(){
-        if( m_pBodyLen!=0) {
+        if( m_pBodyLen!=0 &&m_pBodyLen>256) {
             delete[] m_pBuff;
         }
     }
@@ -58,6 +58,7 @@ namespace net{
         memset(m_pKey,0,sizeof(m_pKey));
         memset(m_pParam,0,sizeof(m_pParam));
         memset(m_pResult,0,sizeof(m_pResult));
+        memset(m_buff,0,sizeof(m_buff));
 
         m_pPid = 0;
         m_pMsgid = 0;
@@ -284,9 +285,14 @@ namespace net{
         if(m_pBodyLen==0){
             return;
         }
-        m_pBuff = (unsigned char*)new char[m_pBodyLen];
         unsigned char* ptmp= (unsigned char*)(m_pbody+5+*plen + *plenTar + *plenPa + *plenRes + sizeof(unsigned long long) + sizeof(unsigned int) + sizeof(unsigned int) );
-        memcpy(m_pBuff, ptmp, m_pBodyLen );
+        if(m_pBodyLen>256){
+            m_pBuff = (unsigned char*)new char[m_pBodyLen];
+            memcpy(m_pBuff, ptmp, m_pBodyLen );
+        }else{
+            memcpy(m_buff,ptmp, m_pBodyLen );
+            m_pBuff = m_buff;
+        }
     }
 
 

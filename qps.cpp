@@ -10,6 +10,7 @@
 #include "net.h"
 #include "./kcpsess/sessServer.h"
 #include "./core/player.h"
+#include "./core/room.h"
 
 using namespace std;
 namespace net{
@@ -50,11 +51,11 @@ namespace net{
             addQps(2,(char*)"rpcTps");
             addQps(3,(char*)"kcpSend");
             addQps(4,(char*)"kcpRecv");
-            /*
+            //*
             addQps(5,(char*)"m1");
             addQps(6,(char*)"m2");
             addQps(7,(char*)"m3");
-            */
+            //*/
         }
     }
 
@@ -105,7 +106,7 @@ namespace net{
         if( netServer::g_netServer->isNet() ){
             sprintf(m_debugInfo, "%s [online: %d]", m_debugInfo, connObjMgr::g_pConnMgr->GetOnline());
         }else{
-            sprintf(m_debugInfo, "%s [online: %d p: %d]", m_debugInfo, KCPServer::m_sInst->getCount(), playerMgr::m_inst->GetCount());
+            sprintf(m_debugInfo, "%s [con:%d p:%d room:%d]", m_debugInfo, KCPServer::m_sInst->getCount(), playerMgr::m_inst->GetCount(), roomMgr::m_inst->Count());
         }
 
         pthread_mutex_unlock(mutexQps);

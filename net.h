@@ -39,6 +39,14 @@ namespace net{
         pthread_mutex_t *mutex ; 
         bool m_bNet;
         char m_name[32];
+
+        //pool obj
+        queue<NET_OP_ST *> m_opStPool;
+        pthread_mutex_t *mutexSt ; 
+        void initStPool();        
+        NET_OP_ST* popSt();
+        void pushSt(NET_OP_ST*);
+
         public:
         static netServer *g_netServer; //for client
         static netServer *g_netRpcServer; //for other server rpc
@@ -54,7 +62,8 @@ namespace net{
         int initEpoll();
         void destroy();
 
-        void appendSt(NET_OP_ST *pst, bool bmtx=true);
+        void rawAppendSt(NET_OP_ST *pst );
+        void appendSt(NET_OP_ST *pst );
         void appendDataIn(int fd);
         void appendConnNew(int fd, char *pip, char* pport);
         void appendConnClose(int fd, bool bmtx=true);
