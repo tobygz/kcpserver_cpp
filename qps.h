@@ -40,6 +40,8 @@ namespace net{
             m_qpsMap[id] = pobj;
         }
         void updateQps(int id, int _size);
+        void getNumStr(char* , unsigned long long _size);
+        void getNumStr(char* , int _size);
         void dumpQpsInfo();
 
         static qpsMgr* g_pQpsMgr ;

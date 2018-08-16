@@ -75,6 +75,25 @@ namespace net{
         tmp->size += _size;
     }
 
+    void qpsMgr::getNumStr(char* pstr, int _size){
+        if(_size >= 1024 & _size < 1024*1024 ){
+            sprintf(pstr,"%.2fk", _size/1024.0 );
+        }else if( _size > 1024*1024 ) {
+            sprintf(pstr,"%.2fM", _size/1024.0/1024);
+        }else{
+            sprintf(pstr,"%d", _size );
+        }
+    }
+    void qpsMgr::getNumStr(char* pstr, unsigned long long _size){
+        if(_size >= 1024 & _size < 1024*1024 ){
+            sprintf(pstr,"%.2fk", _size/1024.0 );
+        }else if( _size >= 1024*1024 ) {
+            sprintf(pstr,"%.2fM", _size/1024.0/1024);
+        }else{
+            sprintf(pstr,"%ld", _size );
+        }
+    }
+
     void qpsMgr::dumpQpsInfo(){
         long long nowMs = getms();
         if(nowMs - m_lastMs<1000){
@@ -85,22 +104,14 @@ namespace net{
         pthread_mutex_lock(mutexQps);
         map<int,qpsObj*>::iterator iter;
         float mval=0;
+        char ct_info[128] = {0};
+        char size_info[128] = {0};
         for( iter=m_qpsMap.begin(); iter!=m_qpsMap.end(); iter++){
             qpsObj* tmp = (qpsObj*) iter->second;
+            getNumStr(ct_info, tmp->count);
+            getNumStr(size_info, tmp->size);
             
-            if(tmp->size>1024*1024){
-                mval = tmp->size/1024/1024.0;
-                sprintf(m_debugInfo, "%s[t:%s c:%d s:%.2f]", m_debugInfo, tmp->info, tmp->count, mval );
-            }else{
-                sprintf(m_debugInfo, "%s[t:%s c:%d s:%lld]", m_debugInfo, tmp->info, tmp->count, tmp->size );
-                /*
-                if(tmp->size == 0 ){
-                    sprintf(m_debugInfo, "%s[t:%s c:%d]", m_debugInfo, tmp->info, tmp->count );
-                }else{
-                    sprintf(m_debugInfo, "%s[t:%s c:%d s:%lld]", m_debugInfo, tmp->info, tmp->count, tmp->size );
-                }
-                */
-            }
+            sprintf(m_debugInfo, "%s[t:%s c:%s s:%s]", m_debugInfo, tmp->info, ct_info, size_info);
             tmp->Reset();
         }
         if( netServer::g_netServer->isNet() ){

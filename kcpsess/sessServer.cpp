@@ -95,7 +95,7 @@ void UDPConn::init(int fd, int epfd, int pid, unsigned char* pbuff, int len){
     m_lastTick = 0;
 
     m_bread = true;
-    
+
     pthread_mutex_lock(mutex_kcp);
     m_kcp = ikcp_create( m_conv, this);
     ikcp_wndsize(m_kcp, 128, 128);
@@ -107,18 +107,13 @@ void UDPConn::init(int fd, int epfd, int pid, unsigned char* pbuff, int len){
     if( len != 0 ){
         ikcp_input(m_kcp, (const char*)pbuff, len);
     }
+    LOG("udpconn inited fd: %d pid: %d len: %d conv: %d m_kcp: %p",fd, pid, len, m_conv, m_kcp);
     pthread_mutex_unlock(mutex_kcp);
-    LOG("udpconn inited fd: %d pid: %d len: %d conv: %d",fd, pid, len, m_conv);
 }
 
 void UDPConn::Close(){
     close(m_fd);
-    /*
-    if(mutex){
-        delete mutex;
-    }
-    */
-
+    
     pthread_mutex_lock(mutex_kcp);
     if(m_kcp){
         ikcp_release(m_kcp);
@@ -126,7 +121,7 @@ void UDPConn::Close(){
     }
     pthread_mutex_unlock(mutex_kcp);
 
-    LOG("udpconn closed pid: %d fd: %d", m_pid, m_fd);
+    LOG("udpconn closed fd: %d pid: %d ",m_fd, m_pid);
 }
 //called by mainloop
 void UDPConn::Update(unsigned int ms){
@@ -215,9 +210,11 @@ int UDPConn::OnDealMsg(unsigned int ms, msgObj* pmsg){
 }
 
 size_t UDPConn::Write(const char *buf, size_t sz) {
+    ssize_t n = 0;
     pthread_mutex_lock(mutex_kcp);
-    assert(m_kcp);
-    ssize_t n = ikcp_send(m_kcp, const_cast<char *>(buf), int(sz));
+    if(m_kcp){
+        n = ikcp_send(m_kcp, const_cast<char *>(buf), int(sz));
+    }
     pthread_mutex_unlock(mutex_kcp);
     if (n == 0) {
         return sz;
@@ -273,7 +270,7 @@ void KCPServer::rawCloseConn(int sessid){
     p->Close();
     m_mapConn.erase(it);
     m_mapSessFd.erase( p->getpid() );
-    LOG("delConn clifd: %d pid: %d", p->getfd(), p->getpid());
+    LOG("delConn fd: %d pid: %d", p->getfd(), p->getpid());
     pushUDPConn(p);
 }
 
@@ -297,7 +294,7 @@ void KCPServer::delConn(int fd){
     }
     UDPConn *p = it->second;
     p->Close();
-    m_mapConn.erase(it);
+    m_mapConn.erase(fd);
     m_mapSessFd.erase( p->getpid() );
     LOG("delConn clifd: %d pid: %d ", p->getfd(), p->getpid());
     pushUDPConn(p);
