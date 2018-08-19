@@ -16,14 +16,20 @@
 
 #define FRAME_TICK_MS 66
 
-#define POOL_PT_2000_SIZE 1024*1024
+//#define POOL_PT_2000_SIZE 1024*1024*16
+//#define POOL_PT_2001_SIZE 1024*1024*16
+
+
+#define POOL_PT_2000_SIZE 1024
+#define POOL_PT_2001_SIZE 1024
+
 #define POOL_ROOMOBJ 1024
 
 using namespace pb;
 
 namespace net{
 
-    roomMgr* roomMgr::m_inst = new roomMgr;
+    roomMgr* roomMgr::m_inst = NULL; //new roomMgr;
 
     void roomObj::init(int roomid){
         m_roomid = roomid;
@@ -91,7 +97,7 @@ namespace net{
         int len = 0;
         while(m_accMs>=m_frameTick){
             m_accMs -= m_frameTick;
-            S2CServerFrameUpdate_2001 *msg = new S2CServerFrameUpdate_2001;
+            S2CServerFrameUpdate_2001 *msg = roomMgr::m_inst->fetchPt2001();
             msg->set_frameid(m_frameId);
 
             for(FRAME_OPER_MAP::iterator it=m_ridOpersMap.begin(); it!= m_ridOpersMap.end(); it++){
@@ -105,7 +111,7 @@ namespace net{
                     roomMgr::m_inst->recyclePt(pop);
                 }
             }
-            LOG("roomobj::update roomid: %d ms: %u len: %d m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, len, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
+            //LOG("roomobj::update roomid: %d ms: %u len: %d m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, len, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
             m_tmpDiff = ms;
             m_allOperMap[m_frameId] = msg;
             //broadcast msg
@@ -276,20 +282,8 @@ namespace net{
     void roomObj::SetReady(){
         m_brun = true;
     }
-    void roomObj::RawOver(){
-        struct timeval tm_s, tm_e;
 
-        S2CMatchOver_213 *pmsg = (S2CMatchOver_213*)&S2CMatchOver_213::default_instance();
-        pmsg->Clear();
-        if(m_frameId>0){
-            pmsg->set_overframeid(m_frameId-1);
-        }else{
-            pmsg->set_overframeid(m_frameId);
-        }
-        Broadcast(213, pmsg);
-        m_brun = false;
-
-        gettimeofday(&tm_s,NULL);
+    void roomObj::Finnal(){
         //send record to gate
         G2gAllRoomFrameData *pgmsg = (G2gAllRoomFrameData *)&G2gAllRoomFrameData::default_instance();
         pgmsg->Clear();
@@ -302,27 +296,31 @@ namespace net{
         m_os.clear();
         m_os.str("");
 
-        gettimeofday(&tm_e, NULL);
-        qpsMgr::g_pQpsMgr->updateQps(5, net::diffTime(tm_e, tm_s));
-
-        gettimeofday(&tm_s,NULL);
         pgmsg->SerializeToOstream(&m_os);
 
-        gettimeofday(&tm_e, NULL);
-        qpsMgr::g_pQpsMgr->updateQps(6, net::diffTime(tm_e, tm_s));
-
-        gettimeofday(&tm_s,NULL);
         tcpclientMgr::m_sInst->rpcCallGate((char*)"UpdateFrameData", 0, 0, (unsigned char*)m_os.str().c_str(), m_os.str().size());
-        LOG("roomid: %d RawOver send frameid: %d bin size: %d", m_roomid, m_frameId, pgmsg->ByteSize());
-
-        gettimeofday(&tm_e, NULL);
-        qpsMgr::g_pQpsMgr->updateQps(7, net::diffTime(tm_e, tm_s));
+        LOG("roomid: %d Finnal bin size: %d", m_roomid, pgmsg->ByteSize());
 
         //release msg memory
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
-            delete it->second;
+            //delete it->second;
+            roomMgr::m_inst->recyclePt2001(it->second);
         }
         m_allOperMap.clear();
+
+    }
+    void roomObj::RawOver(){
+
+        S2CMatchOver_213 *pmsg = (S2CMatchOver_213*)&S2CMatchOver_213::default_instance();
+        pmsg->Clear();
+        if(m_frameId>0){
+            pmsg->set_overframeid(m_frameId-1);
+        }else{
+            pmsg->set_overframeid(m_frameId);
+        }
+        Broadcast(213, pmsg);
+        m_brun = false;
+        LOG("roomid: %d RawOver m_frameId: %d", m_roomid, m_frameId );
 
         for(map<unsigned long long,bool>::iterator it=m_allRidMap.begin(); it!=m_allRidMap.end();it++){
             playerMgr::m_inst->RemoveP(it->first);
@@ -341,10 +339,19 @@ namespace net{
 
     //pool funcs
     void roomMgr::initObjPool(){
+        if( netServer::g_netServer->isNet() ){
+            return;
+        }
         for(int i=0; i<POOL_PT_2000_SIZE; i++ ){
             C2SFrameCommand_2000 *pmsg = new C2SFrameCommand_2000;
             m_pool.push(pmsg);
         }
+
+        for(int i=0; i<POOL_PT_2001_SIZE; i++ ){
+            S2CServerFrameUpdate_2001 *pmsg = new S2CServerFrameUpdate_2001;
+            m_pool2001.push(pmsg);
+        }
+
         for(int i=0; i<POOL_ROOMOBJ; i++){
             roomObj *p = new roomObj;
             m_poolRoom.push(p);
@@ -365,6 +372,24 @@ namespace net{
         return r;
     }
 
+    void roomMgr::recyclePt2001(S2CServerFrameUpdate_2001* p){
+        m_pool2001.push(p);
+    }
+
+    S2CServerFrameUpdate_2001* roomMgr::fetchPt2001(){
+        S2CServerFrameUpdate_2001* pmsg = NULL;
+        if( m_pool2001.size() == 0 ){
+            pmsg = new S2CServerFrameUpdate_2001;
+            //LOG("!!!!!!!!!! unexpected error, pool C2SFrameCommand_2001 was recreated");
+        }else{
+            pmsg = m_pool2001.front();
+            m_pool2001.pop();
+            pmsg->Clear();
+        }
+        return pmsg;
+    }
+
+
     void roomMgr::recyclePt(C2SFrameCommand_2000* p){
         m_pool.push(p);
     }
@@ -373,10 +398,11 @@ namespace net{
         C2SFrameCommand_2000* pmsg = NULL;
         if( m_pool.size() == 0 ){
             pmsg = new C2SFrameCommand_2000;
-            LOG("!!!!!!!!!! unexpected error, pool C2SFrameCommand_2000 was recreated");
+            //LOG("!!!!!!!!!! unexpected error, pool C2SFrameCommand_2000 was recreated");
         }else{
             pmsg = m_pool.front();
             m_pool.pop();
+            pmsg->Clear();
         }
         return pmsg;
     }
@@ -405,13 +431,13 @@ namespace net{
     }
     void roomMgr::DelRoom(int roomid){
         _lock(2);
-        map<int,roomObj*>::iterator it= m_idMap.find(roomid);
-        if(it == m_idMap.end()){
+        map<int,roomObj*>::iterator it= m_finnalRoomMap.find(roomid);
+        if(it == m_finnalRoomMap.end()){
             _unlock(2);
             return ;
         }
         roomObj* p = it->second;
-        m_idMap.erase(roomid);
+        m_finnalRoomMap.erase(roomid);
         pushRoom(p);
         _unlock(2);
         LOG("roommgr DelRoom roomid: %d", roomid );
@@ -425,27 +451,38 @@ namespace net{
         return size;
     }
 
+    void roomMgr::UpdateFinnal(){
+        _lock(8);
+        for(map<int,roomObj*>::iterator it= m_finnalRoomMap.begin(); it!= m_finnalRoomMap.end();it++){
+            roomObj* r = NULL;
+            if(!r){
+                continue;
+            }
+            r->Finnal();
+            pushRoom(r);
+        }
+        m_finnalRoomMap.clear();
+        _unlock(8);
+    }
     void roomMgr::Update(unsigned int ms){
         if(ms-m_lastMs<1){
             return;
         }
         m_lastMs = ms;
 
-        queue<int> dlst;
         _lock(3);
-        for(map<int,roomObj*>::iterator it= m_idMap.begin(); it!= m_idMap.end(); it++ ){
+        for(map<int,roomObj*>::iterator it= m_idMap.begin(); it!= m_idMap.end();){
             if(!it->second){
                 continue;
             }
             if(it->second->Update(ms) == 1 ){
-                dlst.push(it->first);
+                m_finnalRoomMap[it->first] = it->second;
+                m_idMap.erase(it++);
+            }else{
+                it++;
             }
         }
         _unlock(3);
-        while(!dlst.empty()){
-            int id = dlst.front();
-            dlst.pop();
-            DelRoom(id);
-        }
+        UpdateFinnal();
     }
 }

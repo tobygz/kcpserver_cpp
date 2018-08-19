@@ -8,6 +8,7 @@
 #include "../kcpsess/sessServer.h"
 #include "../conn.h"
 #include "../qps.h"
+#include "../net.h"
 
 
 #define POOL_PLAYEROBJ 4096
@@ -31,7 +32,7 @@ namespace net{
         LOG("[%s] bin: %s\n", str, info);
     }
 
-    playerMgr* playerMgr::m_inst = new playerMgr;
+    playerMgr* playerMgr::m_inst = NULL;//new playerMgr;
 
     void playerObj::init(int pid, unsigned long long rid, int roomid ){
         m_pid = pid;
@@ -47,6 +48,7 @@ namespace net{
             KCPServer::m_sInst->rawCloseConn(m_sessid);
         }
         m_sessid = _id; 
+        KCPServer::m_sInst->BindConn(m_sessid);
         m_off = false;
     }
 
@@ -159,6 +161,9 @@ namespace net{
     }
 
     void playerMgr::initObjPool(){
+    if( netServer::g_netServer->isNet() ){
+        return;
+    }
         for(int i=0; i<POOL_PLAYEROBJ; i++){
             playerObj *p = new playerObj;
             m_pool.push(p);

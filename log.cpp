@@ -8,7 +8,7 @@
 
 using namespace std;  
 
-#define MAX_FILE_LEN 1073741824 //1024*1024*1024
+#define MAX_FILE_LEN 268435456 //1024*1024*256
 
 #define LOGST_SIZE 1024*2 //1024*1024*1024
 namespace net {

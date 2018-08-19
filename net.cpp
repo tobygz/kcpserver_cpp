@@ -215,11 +215,6 @@ namespace net{
         }
     }
     int netServer::epAddFd(int fd, char* pname){
-        if(pname != NULL){
-            if(strlen(pname)!=0){
-                m_rpcFdMap[fd] = string(pname);
-            }
-        }
         struct epoll_event event;
         memset(&event,0, sizeof(struct epoll_event));
         event.data.fd = fd;
@@ -265,7 +260,7 @@ namespace net{
                 {
                     // An error has occured on this fd, or the socket is not
                     //   ready for reading (why were we notified then?) 
-                    pthis->appendConnClose(events[i].data.fd);
+                    pthis->appendConnClose(events[i].data.fd, true);
                     continue;
                 }
 
@@ -333,7 +328,7 @@ namespace net{
         list<NET_OP_ST *> listNew;
 
         pthread_mutex_lock(mutex);
-        while(!this->m_netQueue.empty()){
+        while(!m_netQueue.empty()){
             NET_OP_ST *pst = m_netQueue.front();
             m_netQueue.pop();
             if(pst==NULL){
@@ -383,28 +378,15 @@ namespace net{
         tcpclientMgr::m_sInst->processAllRpcobj(ms);
 
         qpsMgr::g_pQpsMgr->dumpQpsInfo();
-        //connObjMgr::g_pConnMgr->ChkConnTimeout();
+        connObjMgr::g_pConnMgr->ChkConnTimeout();
     }
 
     void netServer::rawAppendSt(NET_OP_ST *pst){
-        if( m_rpcFdMap.find(pst->fd) != m_rpcFdMap.end()){
-            pst->bRpc = true;
-            m_netQueueRpc.push(pst);
-        }else{
-            pst->bRpc = false;
-            m_netQueue.push(pst);
-        }
+        m_netQueue.push(pst);
     }
     void netServer::appendSt(NET_OP_ST *pst){
         pthread_mutex_lock(mutex);
-        if( m_rpcFdMap.find(pst->fd) != m_rpcFdMap.end()){
-            pst->bRpc = true;
-            m_netQueueRpc.push(pst);
-        }else{
-            pst->bRpc = false;
-            m_netQueue.push(pst);
-        }
-
+        m_netQueue.push(pst);
         pthread_mutex_unlock(mutex);
     }
 
@@ -412,28 +394,26 @@ namespace net{
         NET_OP_ST *pst = popSt();
         pst->op = DATA_IN;
         pst->fd = fd;
-        this->rawAppendSt(pst);
+        this->appendSt(pst);
     }
 
     void netServer::appendConnNew(int fd, char *pip, char* pport){
         NET_OP_ST *pst = popSt();
-        pst->bRpc = false;
         pst->op = NEW_CONN;
         pst->fd = fd;
         sprintf(pst->paddr, "%s:%s", pip, pport);        
-        this->rawAppendSt(pst);
+        this->appendSt(pst);
     }
     void netServer::appendConnClose(int fd, bool bmtx){
         NET_OP_ST *pst = popSt();
         pst->op = QUIT_CONN;
         pst->fd = fd;
         if(bmtx){
-            this->appendSt(pst);
+            appendSt(pst);
         }else{
-            this->rawAppendSt(pst);
+            rawAppendSt(pst);
         }
     }
-
 
     char* netServer::GetOpType(NET_OP op){
         if( op == NEW_CONN){
@@ -444,53 +424,6 @@ namespace net{
             return (char*)"QUIT_CONN";
         }
         return (char*)"";
-    }
-
-
-    void netServer::queueProcessRpc(){
-        queue<int> queNew;
-        pthread_mutex_lock(mutex);
-
-        while(!this->m_netQueueRpc.empty()){
-            NET_OP_ST *pst = m_netQueueRpc.front();
-            m_netQueueRpc.pop();
-            if(pst==NULL){
-                continue;
-            }
-            if(pst->op == NEW_CONN){
-            }else if(pst->op == DATA_IN){
-                m_readFdMap[pst->fd] = true;
-            }else if(pst->op == QUIT_CONN){
-                tcpclientMgr::m_sInst->DelConn(pst->fd);
-            }
-            pushSt(pst);
-        }
-        //LOG("called queueProcessRpc m_readFdMap size: %d\n", m_readFdMap.size());
-
-        pthread_mutex_unlock(mutex);
-
-        queue<int> delLst;
-        //process all read event
-        int fd ;
-        for(map<int,bool>::iterator iter = m_readFdMap.begin(); iter != m_readFdMap.end(); iter++){
-            fd = (int) iter->first;
-            tcpclient *pconn = tcpclientMgr::m_sInst->getTcpClientByFd(fd);
-            if (pconn == NULL){
-                delLst.push(fd);
-                continue;
-            }
-            pconn->OnRead();
-            delLst.push(fd);
-            pconn->dealReadBuffer();
-            pconn->dealSend();
-        }
-
-        while(!delLst.empty()){
-            int nfd = delLst.front();
-            delLst.pop();
-            m_readFdMap.erase(nfd);
-        }
-
     }
 
 }

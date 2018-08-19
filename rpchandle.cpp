@@ -316,6 +316,7 @@ namespace net{
             }
             p->setSessid(sessid);
             r->EnterP(p);            
+            LOG("[INFO] Api_2004 , pid: %d, sessid: %d roomid: %d",pid, sessid, p->getRoomid()); 
         }else if( obj->getMsgid() == 2002 ){
             //process 2002
             playerObj *p = playerMgr::m_inst->GetP( pid );

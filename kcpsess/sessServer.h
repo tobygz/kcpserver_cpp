@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <map>
 #include <queue>
+#include <string>
 
 #include "../recvBuff.h"
 
@@ -20,7 +21,7 @@ class UDPConn {
 
     int m_conv;
     int m_fd;
-    int m_pid;
+    int m_id;
 
     bool m_bread;
 
@@ -33,7 +34,7 @@ class UDPConn {
     UDPConn();
     void init(int fd, int epfd, int pid, unsigned char* buf, int len);
     int getfd(){ return m_fd;}
-    int getpid(){ return m_pid;}
+    int getid(){ return m_id;}
     int m_epollFd;
     //for kcp input
     unsigned char m_buf[READ_BUFF_SIZE];
@@ -42,8 +43,8 @@ class UDPConn {
 
     void setRead(){ m_bread = true; }
 
-    //for check timeout
-    unsigned int m_lastTick;
+    bool m_bind;
+    unsigned int m_bornTick;
 
     size_t Write(const char *buf, size_t sz);
 
@@ -52,6 +53,7 @@ class UDPConn {
     int OnDealMsg(unsigned int, msgObj *);
     void Update(unsigned int ms);
     bool OnCheckTimeout(unsigned int ms);
+    void Bind();
     private:
 
     static int out_wrapper(const char *buf, int len, struct IKCPCB *, void *user);
@@ -93,12 +95,14 @@ class KCPServer {
         static long g_sess_id;
         static KCPServer* m_sInst;
 
+        string getAllSessid();
         UDPConn* createConn(int clifd, unsigned char* hbuf,int len); 
         int getServFd(){return m_servFd;}
         void delConn(int fd);
         void closeConn(int sessid);
         void rawCloseConn(int sessid);
         UDPConn* rawGetConn(int sessid);
+        void BindConn(int sessid);
         pthread_t Listen(const int lport);
         static void* epThread(void*);
         int getEpfd(){return m_epollFd;}
@@ -112,7 +116,6 @@ class KCPServer {
 
         //pool
         private:
-            pthread_mutex_t *mutexPool ; 
             queue<UDPConn*> m_pool;
             void initPool();
         public:

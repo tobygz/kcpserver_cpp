@@ -63,6 +63,7 @@ namespace net{
                 //net conncted
                 connRpcObj::m_inst = new connRpcObj(pst->fd);
                 connRpcObj::m_inst->SetPid(maxSessid++);
+                connRpcObj::m_inst->SetRpc();
                 m_connMap[connRpcObj::m_inst->GetPid()] = connRpcObj::m_inst;
                 m_connFdMap[pst->fd] = connRpcObj::m_inst->GetPid();
                 connRpcObj::m_inst->OnInit( (char*)pst->paddr, bNet );
@@ -150,10 +151,15 @@ namespace net{
         if(it1 != m_connPidGameMap.end()){
             m_connPidGameMap.erase(it1);
         }
-        pthread_mutex_unlock(mutex);
         p->OnClose(btimeOut);
         LOG("connObjMgr delconn, fd: %d pid: %d", fd, p->GetPid());
+        if(p->IsRpc()){
+            connRpcObj::m_inst = NULL;
+            LOG("connObjMgr Closed !!!, fd: %d pid: %d", fd, p->GetPid());
+        }
         delete p;
+
+        pthread_mutex_unlock(mutex);
     }
 
     void connObjMgr::destroy(){

@@ -29,6 +29,10 @@ static IINT64 diffTime(timeval te, timeval ts);
 
 void onQuit(int sigval){
     LOG("called onQuit sigval: %d", sigval);
+    if( netServer::g_netServer->isNet() == false && KCPServer::m_sInst){
+        //LOG("allsessid: %s",KCPServer::m_sInst->getAllSessid().c_str());
+        usleep(100000);
+    }
     if(sigval == SIGINT || sigval == SIGQUIT ) {
         netServer::g_run = false;
     }
@@ -91,6 +95,11 @@ int main(int argc, char*argv[]){
         //for game
         serverCfg::m_gInst->init("game");
         netServer::g_netServer->setName(name);
+
+        roomMgr::m_inst = new roomMgr;
+        playerMgr::m_inst = new playerMgr;
+        KCPServer::m_sInst = new KCPServer;
+
         //for listen socket
         pthread_t id = InitGameListen( serverCfg::m_gInst->getListen() );
         pthread_t id_kcp = InitKcpListen();

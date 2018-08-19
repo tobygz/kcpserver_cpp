@@ -67,6 +67,7 @@ namespace net{
             void Over(bool force=true);
             void SetReady();
             void RawOver();
+            void Finnal();
 
             void UpdateDelta(unsigned int );
             int getRoomid(){ return m_roomid; }
@@ -74,11 +75,12 @@ namespace net{
 
     class roomMgr{
         protected:
+            map<int,roomObj*> m_finnalRoomMap;
+
             map<int,roomObj*> m_idMap;
             pthread_mutex_t *mutex ; 
             ostringstream m_os;
             unsigned int m_lastMs;
-            queue<C2SFrameCommand_2000 *> m_pool;
             void initObjPool();
         public:
             static roomMgr* m_inst;
@@ -87,16 +89,24 @@ namespace net{
             roomObj* GetRoom(int roomid);
             void DelRoom(int roomid);
             void Update(unsigned int ms);
+            void UpdateFinnal();
             int Count();
             void _lock(int );
             void _unlock(int );
 
 
             //pool func
+            
+            
+            S2CServerFrameUpdate_2001* fetchPt2001();
+            void recyclePt2001(S2CServerFrameUpdate_2001*);
+
             C2SFrameCommand_2000* fetchPt();
             void recyclePt(C2SFrameCommand_2000*);
 
         private:
+            queue<S2CServerFrameUpdate_2001*> m_pool2001;
+            queue<C2SFrameCommand_2000 *> m_pool;
             queue<roomObj*> m_poolRoom;
         public:
             void pushRoom(roomObj*);

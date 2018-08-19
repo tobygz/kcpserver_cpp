@@ -56,6 +56,7 @@ namespace net{
         char m_name[128];
         char m_ip[128];
         int m_port;
+        bool m_bNet;
 
         queue<rpcObj*> m_queRpcObj;
         queue<sendCache*> m_sendCacheQueue;

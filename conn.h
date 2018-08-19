@@ -18,6 +18,7 @@ namespace net{
             int m_fd;
             int m_pid;
             
+            bool m_rpc;
             bool m_bclose;
 
             int m_lastSec; //for timeout process
@@ -39,11 +40,13 @@ namespace net{
             int _OnRead();
         public:
             connObj(int _fd);
-            ~connObj(){
+            virtual ~connObj(){
                 delete[] m_psendBuf;
             }
             void SetPid(int _pid);
             int GetPid();
+            void SetRpc(){m_rpc = true;}
+            bool IsRpc(){ return m_rpc; }
             int GetFd();
             int OnRead();
             void OnClose(bool btimeOut=false);
@@ -63,6 +66,7 @@ namespace net{
             msgObj* m_pmsg;
         public:
             connNetObj(int _fd);
+            virtual ~connNetObj();
             virtual void dealMsg(msgObj *p);
             virtual bool parseBuff();
             virtual bool IsTimeout(int sec);

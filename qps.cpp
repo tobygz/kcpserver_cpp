@@ -51,7 +51,7 @@ namespace net{
             addQps(2,(char*)"rpcTps");
             addQps(3,(char*)"kcpSend");
             addQps(4,(char*)"kcpRecv");
-            //*
+            /*
             addQps(5,(char*)"m1");
             addQps(6,(char*)"m2");
             addQps(7,(char*)"m3");
@@ -76,7 +76,7 @@ namespace net{
     }
 
     void qpsMgr::getNumStr(char* pstr, int _size){
-        if(_size >= 1024 & _size < 1024*1024 ){
+        if(_size >= 1024 && _size < 1024*1024 ){
             sprintf(pstr,"%.2fk", _size/1024.0 );
         }else if( _size > 1024*1024 ) {
             sprintf(pstr,"%.2fM", _size/1024.0/1024);
@@ -85,12 +85,12 @@ namespace net{
         }
     }
     void qpsMgr::getNumStr(char* pstr, unsigned long long _size){
-        if(_size >= 1024 & _size < 1024*1024 ){
+        if(_size >= 1024 && _size < 1024*1024 ){
             sprintf(pstr,"%.2fk", _size/1024.0 );
         }else if( _size >= 1024*1024 ) {
             sprintf(pstr,"%.2fM", _size/1024.0/1024);
         }else{
-            sprintf(pstr,"%ld", _size );
+            sprintf(pstr,"%lld", _size );
         }
     }
 
@@ -103,7 +103,6 @@ namespace net{
         memset(m_debugInfo,0,sizeof m_debugInfo);
         pthread_mutex_lock(mutexQps);
         map<int,qpsObj*>::iterator iter;
-        float mval=0;
         char ct_info[128] = {0};
         char size_info[128] = {0};
         for( iter=m_qpsMap.begin(); iter!=m_qpsMap.end(); iter++){

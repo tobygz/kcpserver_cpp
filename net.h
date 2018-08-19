@@ -23,7 +23,6 @@ namespace net{
         NET_OP op;
         int fd;
         char paddr[64];
-        bool bRpc;
     };
 
     int make_socket_non_blocking (int sfd);
@@ -33,9 +32,7 @@ namespace net{
 
     class netServer{
         std::queue<NET_OP_ST*> m_netQueue;
-        std::queue<NET_OP_ST*> m_netQueueRpc;
         std::map<int,bool> m_readFdMap;
-        std::map<int,string> m_rpcFdMap; //rpc fd->name
         pthread_mutex_t *mutex ; 
         bool m_bNet;
         char m_name[32];
@@ -66,14 +63,13 @@ namespace net{
         void appendSt(NET_OP_ST *pst );
         void appendDataIn(int fd);
         void appendConnNew(int fd, char *pip, char* pport);
-        void appendConnClose(int fd, bool bmtx=true);
+        void appendConnClose(int fd, bool bmtx=false);
 
         static bool g_run;
         static void* netThreadFun( void* );
         void queueProcessFun( unsigned int ); //for clients
         char* GetOpType(NET_OP );
 
-        void queueProcessRpc(); //for rpc
 
     };
 

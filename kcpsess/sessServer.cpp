@@ -10,6 +10,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <sstream>
 
 #include "../recvBuff.h"
 #include "../log.h"
@@ -20,7 +21,7 @@
 
 #define IKCP_OVERHEAD 24
 #define MAXEVENT 64
-#define KCP_CONN_TIMEOUT_MS 1000*90 
+#define KCP_CONN_TIMEOUT_MS 1000*20 
 #define KCP_CONN_TIMEOUT_FREQ_MS 1000*2 //2s
 #define KCP_UDPCONN_SIZE 8192 //2s
 
@@ -48,7 +49,7 @@ void printBytes(unsigned char *val, size_t size, char *str) {
 }
 
 
-KCPServer* KCPServer::m_sInst = new KCPServer;
+KCPServer* KCPServer::m_sInst = NULL; //new KCPServer;
 long KCPServer::g_sess_id= 0;
 
 int setnonblocking(int sockfd)
@@ -85,15 +86,16 @@ UDPConn::UDPConn(){
     pthread_mutex_init( mutex_kcp, NULL );
 }
 
-void UDPConn::init(int fd, int epfd, int pid, unsigned char* pbuff, int len){
+void UDPConn::init(int fd, int epfd, int id, unsigned char* pbuff, int len){
     m_fd = fd;
     m_offset = 0;
     m_epollFd = epfd;
-    m_pid = pid;
+    m_id = id;
 
     m_conv = *(int*)pbuff;
-    m_lastTick = 0;
+    m_bornTick = net::currentMs();
 
+    m_bind = false;
     m_bread = true;
 
     pthread_mutex_lock(mutex_kcp);
@@ -107,8 +109,12 @@ void UDPConn::init(int fd, int epfd, int pid, unsigned char* pbuff, int len){
     if( len != 0 ){
         ikcp_input(m_kcp, (const char*)pbuff, len);
     }
-    LOG("udpconn inited fd: %d pid: %d len: %d conv: %d m_kcp: %p",fd, pid, len, m_conv, m_kcp);
+    LOG("udpconn inited fd: %d id: %d len: %d conv: %d m_kcp: %p",fd, id, len, m_conv, m_kcp);
     pthread_mutex_unlock(mutex_kcp);
+}
+
+void UDPConn::Bind(){
+    m_bind = true;
 }
 
 void UDPConn::Close(){
@@ -121,7 +127,7 @@ void UDPConn::Close(){
     }
     pthread_mutex_unlock(mutex_kcp);
 
-    LOG("udpconn closed fd: %d pid: %d ",m_fd, m_pid);
+    LOG("udpconn closed sessid: %d fd: %d ",m_id, m_fd);
 }
 //called by mainloop
 void UDPConn::Update(unsigned int ms){
@@ -145,12 +151,17 @@ bool UDPConn::OnRead(){
 }
 
 bool UDPConn::OnCheckTimeout(unsigned int ms){
-    unsigned int lastTick = 0;
+    unsigned int bornTick = 0;
+    bool bind = false;
     pthread_mutex_lock(mutex);
-    lastTick = m_lastTick;
+    bornTick = m_bornTick;
+    bind = m_bind;
     pthread_mutex_unlock(mutex);
+    if(bind){
+        return false;
+    }
 
-    if( ms - lastTick > KCP_CONN_TIMEOUT_MS ){
+    if(bind == false && ms-bornTick > KCP_CONN_TIMEOUT_MS ) {
         return true;
     }
     return false;
@@ -161,9 +172,11 @@ int UDPConn::OnDealMsg(unsigned int ms, msgObj* pmsg){
         return 0;
     }
     m_bread = false;
+    /*
     pthread_mutex_lock(mutex);
     m_lastTick = ms;
     pthread_mutex_unlock(mutex);
+    */
 
     pthread_mutex_lock(mutex_kcp);
     int psz = ikcp_peeksize(m_kcp);
@@ -197,7 +210,7 @@ int UDPConn::OnDealMsg(unsigned int ms, msgObj* pmsg){
     int pid = ppid&0x00000000ffffffff;
     pmsg->init(pmsgid, bodylen, (unsigned char*)(m_cacheBuf+m_offset+16));
 
-    rpcGameHandle::m_pInst->process(pmsg, pid, m_pid);
+    rpcGameHandle::m_pInst->process(pmsg, pid, m_id);
 
     qpsMgr::g_pQpsMgr->updateQps(4, *bodylen);
 
@@ -238,20 +251,16 @@ void KCPServer::sendMsg(int sessid, unsigned char* pbuff, int size){
     if(sessid == 0 ){
         return;
     }
-    //pthread_mutex_lock(mutex);
     map<int,int>::iterator it = m_mapSessFd.find(sessid);
     if(it==m_mapSessFd.end()){
         LOG("[ERROR] sendMsg failed, sessid: %d size: %d", sessid, size);
-        //pthread_mutex_unlock(mutex);
         return;
     }  
     map<int,UDPConn*>::iterator it1 = m_mapConn.find(it->second);
     if(it1==m_mapConn.end()){
-        //pthread_mutex_unlock(mutex);
         LOG("[ERROR] sendMsg failed, sessid: %d fd: %d size: %d", sessid, it->second, size);
         return;
     } 
-    //pthread_mutex_unlock(mutex);
     UDPConn *p = it1->second;
     p->Write( (const char*)pbuff, size );
 }
@@ -267,11 +276,19 @@ void KCPServer::rawCloseConn(int sessid){
         return;
     }
     UDPConn *p = it->second;
+    m_mapConn.erase(it->first);
+    m_mapSessFd.erase( p->getid() );
+    LOG("delConn sessid: %d fd: %d all: %s",p->getid(), p->getfd(), getAllSessid().c_str());
     p->Close();
-    m_mapConn.erase(it);
-    m_mapSessFd.erase( p->getpid() );
-    LOG("delConn fd: %d pid: %d", p->getfd(), p->getpid());
     pushUDPConn(p);
+}
+
+void KCPServer::BindConn(int sessid){
+   UDPConn *pconn = rawGetConn(sessid); 
+   if(!pconn){
+       return;
+   }
+   pconn->Bind();
 }
 
 void KCPServer::closeConn(int sessid){
@@ -285,6 +302,17 @@ void KCPServer::closeConn(int sessid){
     delConn(pconn->getfd());
 }
 
+string KCPServer::getAllSessid(){
+    stringstream ss;
+    //pthread_mutex_lock(mutex);
+    for(map<int,int>::iterator it=m_mapSessFd.begin(); it!=m_mapSessFd.end(); it++){
+        ss << it->first;
+        ss << " ";
+    }
+    //pthread_mutex_unlock(mutex);
+    return ss.str();
+}
+
 void KCPServer::delConn(int fd){
     pthread_mutex_lock(mutex);
     map<int,UDPConn*>::iterator it = m_mapConn.find(fd);
@@ -293,10 +321,10 @@ void KCPServer::delConn(int fd){
         return;
     }
     UDPConn *p = it->second;
-    p->Close();
     m_mapConn.erase(fd);
-    m_mapSessFd.erase( p->getpid() );
-    LOG("delConn clifd: %d pid: %d ", p->getfd(), p->getpid());
+    m_mapSessFd.erase( p->getid() );
+    LOG("delConn sessid: %d clifd: %d all: %s", p->getid(), p->getfd(), getAllSessid().c_str());
+    p->Close();
     pushUDPConn(p);
     pthread_mutex_unlock(mutex);
 }
@@ -305,14 +333,13 @@ UDPConn* KCPServer::createConn(int clifd, unsigned char* buf, int len){
     UDPConn* pcon = NULL;
     pthread_mutex_lock(mutex);
     g_sess_id++;
-    pcon = popUDPConn(); //new UDPConn(clifd, m_epollFd, g_sess_id, buf, len);
+    pcon = popUDPConn(); 
     pcon->init(clifd, m_epollFd, g_sess_id, buf, len);
     m_mapConn[clifd] = pcon;
     m_mapSessFd[g_sess_id] = clifd;
-    LOG("createConn clifd: %d pid: %d len: %d", clifd, pcon->getpid(), len);
+    LOG("createConn sessid: %d clifd: %d len: %d",pcon->getid(), clifd, len);
     setnonblocking(clifd);
     if( len != 0 ){
-        //m_readMap[pcon->getpid()] = true;
         pcon->setRead();
     }
     pthread_mutex_unlock(mutex);
@@ -360,7 +387,7 @@ void KCPServer::acceptConn()
         }
 
         if( rret < IKCP_OVERHEAD) {
-            LOG("invalied format recv from addr: client_addr 11");
+            LOG("invalied format recv from addr len: %d ", rret);
             return;
         }
 
@@ -386,7 +413,7 @@ void KCPServer::acceptConn()
         } 
         else
         {
-            LOG("IP and port bind success ");
+            //LOG("IP and port bind success ");
         }
         if(clifd==-1){
             perror("fatal eror here");
@@ -505,6 +532,9 @@ KCPServer::KCPServer(){
 
 
 void KCPServer::initPool(){
+    if( netServer::g_netServer->isNet() ){
+        return;
+    }
     for(int i=0; i<KCP_UDPCONN_SIZE; i++){
         UDPConn *p = new UDPConn;
         m_pool.push(p);

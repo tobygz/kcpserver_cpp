@@ -190,6 +190,7 @@ namespace net{
         m_ReadOffset = 0;
 
         m_bclose = false;
+        m_rpc = false;
 
 
         //memset(memchk,0,1024);
@@ -329,13 +330,16 @@ namespace net{
             return false;
         }
         if( nowsec - m_lastSec >= 11){
-            LOG("nowsec: %d lastsec: %d timeout", nowsec, m_lastSec);
+            LOG("connNetObj IsTimeout nowsec: %d lastsec: %d timeout", nowsec, m_lastSec);
             return true;
         }else{
             return false;
         }
     }
 
+    connNetObj::~connNetObj(){
+        delete m_pmsg;
+    }
     connNetObj::connNetObj(int _fd):connObj(_fd){
         m_pmsg = new msgObj;
         m_ReadOffset = 0;

@@ -16,6 +16,7 @@
 #include "rpchandle.h"
 #include "log.h"
 #include "qps.h"
+#include "core/room.h"
 
 namespace net{
 
@@ -76,8 +77,23 @@ namespace net{
 
     void* tcpclientMgr::writeThread(void *){
         LOG("tcpclientMgr::writeThread started");
+
+        unsigned int nowMs, ms = net::currentMs();
+        unsigned int lastMs = ms;
+        bool bNet = netServer::g_netServer->isNet();
         while(netServer::g_run){
             m_sInst->processDealSend();
+
+            /*
+            if(!bNet){
+                nowMs = net::currentMs();
+                if(nowMs - lastMs > 20){
+                    roomMgr::m_inst->UpdateFinnal();
+                    lastMs = nowMs;
+                }
+            }
+            */
+
             usleep(1000);
         }
         LOG("tcpclientMgr::writeThread quit");
@@ -157,6 +173,7 @@ namespace net{
         strcpy(m_ip, ip);
         m_port = port;
         m_recvOffset = 0;
+        m_bNet = netServer::g_netServer->isNet();
         m_pSendCache = new sendCache;
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );
@@ -253,8 +270,7 @@ namespace net{
             m_queRpcObj.push(p);
             pthread_mutex_unlock(mutexRecv);
 
-            
-            if(netServer::g_netServer->isNet()){
+            if(m_bNet){
                 qpsMgr::g_pQpsMgr->updateQps(1, 4+bodylen);
             }else{
                 qpsMgr::g_pQpsMgr->updateQps(2, 4+bodylen);
@@ -273,7 +289,7 @@ namespace net{
         while(!m_queRpcObj.empty()){
             rpcObj *p = m_queRpcObj.front();
             m_queRpcObj.pop();
-            if(netServer::g_netServer->isNet()){
+            if(m_bNet){
                 rpcNetHandle::m_pInst->process(p);
             }else{
                 rpcGameHandle::m_pInst->process(p);
@@ -284,8 +300,8 @@ namespace net{
 
     void tcpclient::AppendSend(char* target, unsigned long long pid, unsigned int msgid, unsigned char* pbyte, unsigned int byteLen){                
         //check size enough
-        int needSize = rpcObj::getRpcSize(target, pid, msgid, pbyte, byteLen);
         cautoLock autolock(mutex);
+        int needSize = rpcObj::getRpcSize(target, pid, msgid, pbyte, byteLen);
         if( !m_pSendCache ) {
             m_pSendCache = new sendCache;
         }
