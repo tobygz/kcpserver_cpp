@@ -23,7 +23,8 @@ namespace net{
             ostringstream m_os;
             istringstream m_is;
         public:
-            playerObj(){}
+            playerObj();
+            ~playerObj();
             void init(int pid, unsigned long long rid, int roomid );
             unsigned long long getRid(){return m_rid;}
             void setCamp(int val){ m_camp = val; }
@@ -68,6 +69,8 @@ namespace net{
         public:
             void pushPlayer(playerObj*);
             playerObj* popPlayer();
+
+            string DebugInfo();
     };
 }
 #endif

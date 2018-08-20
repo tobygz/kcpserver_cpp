@@ -77,6 +77,7 @@ namespace net{
             
     };
 
+    /*
     class recvBuff  {
         private:
             char    m_pMem[ DEFAULT_RECV_SIZE ];
@@ -106,6 +107,7 @@ namespace net{
 
             bool    unpack();
     };
+    */
 
     class sendCache {
         unsigned char m_mem[RPC_BUFF_SIZE];
@@ -114,6 +116,8 @@ namespace net{
         static unsigned int g_guid;
         public:
         sendCache();
+        void init();
+        ~sendCache();
         unsigned char* getPtr(){ return (unsigned char*) m_mem; }
         unsigned int getOffset(){ return m_offset; }
         unsigned int getuid(){ return m_uid; }

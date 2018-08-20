@@ -1,9 +1,9 @@
 #include "player.h"
 #include <stdio.h>
 #include <assert.h>
+#include <sstream>
+
 #include "./pb/login.pb.h"
-
-
 #include "../log.h"
 #include "../kcpsess/sessServer.h"
 #include "../conn.h"
@@ -11,7 +11,8 @@
 #include "../net.h"
 
 
-#define POOL_PLAYEROBJ 4096
+//#define POOL_PLAYEROBJ 4096
+#define POOL_PLAYEROBJ 0
 
 namespace net{
     void printBytes(unsigned char *val, size_t size, char *str) {
@@ -34,6 +35,12 @@ namespace net{
 
     playerMgr* playerMgr::m_inst = NULL;//new playerMgr;
 
+    playerObj::playerObj(){
+        LOG("new playerobj: %p", this);
+    }
+    playerObj::~playerObj(){
+        LOG("del playerobj: %p", this);
+    }
     void playerObj::init(int pid, unsigned long long rid, int roomid ){
         m_pid = pid;
         m_rid = rid;
@@ -126,6 +133,7 @@ namespace net{
         m_pidPMap[p->getpid()] = p;
         LOG("playerMgr::AppendP pid: %d rid: %lld, roomid: %d p: %p", p->getpid(), p->getRid(), p->getRoomid(), p);
     }
+
     void playerMgr::AppendP(int pid, unsigned long long rid, char *acc , int roomid ){
         playerObj *p = popPlayer();//new playerObj(pid, rid, roomid );
         p->init(pid, rid, roomid);
@@ -182,6 +190,12 @@ namespace net{
             m_pool.pop();
         }
         return p;
+    }
+
+    string playerMgr::DebugInfo(){
+        stringstream ss;
+        ss << "in kcpserver, m_ridPMap size:" << m_ridPMap.size() << ", playerobj pool size: " << m_pool.size() << endl;
+        return ss.str();
     }
 
 

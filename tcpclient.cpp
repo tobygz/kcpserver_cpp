@@ -9,6 +9,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <assert.h>
+#include <sstream>
 
 #include "net.h"
 #include "recvBuff.h"
@@ -28,6 +29,9 @@ namespace net{
     tcpclientMgr::tcpclientMgr(){
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );
+
+        mutexPool = new pthread_mutex_t;
+        pthread_mutex_init( mutexPool, NULL );
     }
 
     //send rpc result to client; called by main thread;
@@ -97,6 +101,32 @@ namespace net{
             usleep(1000);
         }
         LOG("tcpclientMgr::writeThread quit");
+    }
+
+    void tcpclientMgr::pushSendcache(sendCache* p){
+        pthread_mutex_lock(mutexPool);
+        p->init();
+        m_pool.push(p);
+        pthread_mutex_unlock(mutexPool);
+    }
+    sendCache* tcpclientMgr::popSendcache(){
+        sendCache *p = NULL;
+        pthread_mutex_lock(mutexPool);
+        if(m_pool.empty()){
+            p = new sendCache;
+            LOG("tcpclientMgr new sendCache %p", p );
+        }else{
+            p = m_pool.front();
+            m_pool.pop();
+        }
+        pthread_mutex_unlock(mutexPool);
+        return p;
+    }
+
+    string tcpclientMgr::DebugInfo(){
+        stringstream ss;
+        ss << "tcpclientMgr sendcache pool size: " << m_pool.size() << endl;
+        return ss.str();
     }
 
     tcpclient* tcpclientMgr::createTcpclient(char* name, char* ip, int port){
@@ -174,7 +204,7 @@ namespace net{
         m_port = port;
         m_recvOffset = 0;
         m_bNet = netServer::g_netServer->isNet();
-        m_pSendCache = new sendCache;
+        m_pSendCache = NULL;
         mutex = new pthread_mutex_t;
         pthread_mutex_init( mutex, NULL );
 
@@ -303,12 +333,14 @@ namespace net{
         cautoLock autolock(mutex);
         int needSize = rpcObj::getRpcSize(target, pid, msgid, pbyte, byteLen);
         if( !m_pSendCache ) {
-            m_pSendCache = new sendCache;
+            m_pSendCache = tcpclientMgr::m_sInst->popSendcache();
+            assert(m_pSendCache);
         }
         qpsMgr::g_pQpsMgr->updateQps(2, needSize );
         if(needSize > m_pSendCache->getLeftSize()){
             m_sendCacheQueue.push( m_pSendCache );
-            m_pSendCache = new sendCache;
+            m_pSendCache = tcpclientMgr::m_sInst->popSendcache();
+            assert(m_pSendCache);
         }
         assert( needSize < m_pSendCache->getLeftSize() );
 
@@ -347,7 +379,8 @@ namespace net{
             LOG(" send to gate before size: %d limitsize: %d", p->getOffset(), RPC_BUFF_SIZE );
             assert(p->getOffset()<=RPC_BUFF_SIZE);
             if(p->getOffset() == 0){
-                delete p;
+                tcpclientMgr::m_sInst->pushSendcache(p);
+                //delete p;
                 continue;
             }
             if(ret != -1 ){
@@ -355,12 +388,15 @@ namespace net{
                 if( ret == -1 ){
                     tcpclientMgr::m_sInst->DelConn(m_sock);
                     LOG("[ERROR] handleSend ret fail");
+                    tcpclientMgr::m_sInst->pushSendcache(p);
+                    //delete p;
                     return -1;
                 }else{
                     LOG(" send to gate size: %d", p->getOffset() );
                 }
             }
-            delete p;
+            tcpclientMgr::m_sInst->pushSendcache(p);
+                //delete p;
         }
         m_pSendCache = NULL;
         return 0;

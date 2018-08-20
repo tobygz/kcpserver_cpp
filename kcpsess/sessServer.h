@@ -96,6 +96,7 @@ class KCPServer {
         static KCPServer* m_sInst;
 
         string getAllSessid();
+        string DebugInfo();
         UDPConn* createConn(int clifd, unsigned char* hbuf,int len); 
         int getServFd(){return m_servFd;}
         void delConn(int fd);

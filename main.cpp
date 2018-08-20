@@ -13,6 +13,7 @@
 #include "cfg.h"
 #include "log.h"
 #include "conn.h"
+#include "connmgr.h"
 #include "qps.h"
 #include "./core/room.h"
 #include "./kcpsess/sessServer.h"
@@ -27,7 +28,12 @@ pthread_t InitGameListen(char* port);
 pthread_t InitKcpListen();
 static IINT64 diffTime(timeval te, timeval ts);
 
+void dumpDebugInfo();
 void onQuit(int sigval){
+    if(sigval == SIGUSR1 ){
+        dumpDebugInfo();
+        return;
+    }
     LOG("called onQuit sigval: %d", sigval);
     if( netServer::g_netServer->isNet() == false && KCPServer::m_sInst){
         //LOG("allsessid: %s",KCPServer::m_sInst->getAllSessid().c_str());
@@ -44,6 +50,7 @@ int main(int argc, char*argv[]){
 
     signal(SIGINT, onQuit);
     signal(SIGQUIT, onQuit);
+    signal(SIGUSR1, onQuit);
     signal(SIGPIPE, SIG_IGN);
 
     if( argc < 2 ){
@@ -230,3 +237,11 @@ pthread_t InitKcpListen(){
 }
 
 
+void dumpDebugInfo(){
+    stringstream ss;
+    //ss<< connObjMgr::g_pConnMgr->DebugInfo();
+    ss<< tcpclientMgr::m_sInst->DebugInfo();
+    ss<< roomMgr::m_inst->DebugInfo();
+    ss<< playerMgr::m_inst->DebugInfo();
+    LOG(" dumpDebugInfo: %s", ss.str().c_str());
+}

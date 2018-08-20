@@ -379,6 +379,7 @@ namespace net{
     }
 
 
+    /*
     recvBuff::~recvBuff(){
         memset( m_pMem, 0, DEFAULT_RECV_SIZE );
         if(m_pBuffer != m_pMem){
@@ -475,14 +476,24 @@ namespace net{
         m_pPointer += len;
         return len;
     }
+    */
 
 
     sendCache::sendCache(){
         memset(m_mem,0,RPC_BUFF_SIZE);
         m_offset = 0;
         m_uid = g_guid++;
+        LOG("new sendCache uid: %d", m_uid );
     }
 
+    sendCache::~sendCache(){
+        LOG("delete sendCache uid: %d", m_uid );
+    }
+
+    void sendCache::init(){
+        memset(m_mem,0,RPC_BUFF_SIZE);
+        m_offset = 0;
+    }
     int sendCache::dosend(int fd){
         unsigned char* pbuf = this->getPtr();
         size_t size = this->getOffset();

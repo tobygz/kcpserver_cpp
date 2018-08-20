@@ -5,6 +5,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <sstream>
 
 
 #include "../log.h"
@@ -23,7 +24,8 @@
 #define POOL_PT_2000_SIZE 1024
 #define POOL_PT_2001_SIZE 1024
 
-#define POOL_ROOMOBJ 1024
+//#define POOL_ROOMOBJ 1024
+#define POOL_ROOMOBJ 0
 
 using namespace pb;
 
@@ -53,7 +55,11 @@ namespace net{
         m_allRidMap.clear();
     }
 
+    roomObj::roomObj(){
+        LOG("new roomobj %p", this);
+    }
     roomObj::~roomObj(){
+        LOG("del roomobj %p", this);
     }
 
     void roomObj::UpdateDelta(unsigned int delta){
@@ -286,26 +292,41 @@ namespace net{
     void roomObj::Finnal(){
         //send record to gate
         G2gAllRoomFrameData *pgmsg = (G2gAllRoomFrameData *)&G2gAllRoomFrameData::default_instance();
+        auto ref = pgmsg->mutable_datalist();
         pgmsg->Clear();
         pgmsg->set_frametime(m_frameTick);
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
-            S2CServerFrameUpdate_2001 *ptmp = pgmsg->add_datalist();
-            ptmp->CopyFrom(*it->second);
+            ref->AddAllocated( it->second );
         }
 
         m_os.clear();
         m_os.str("");
 
         pgmsg->SerializeToOstream(&m_os);
+        ref->Clear();
+        while(ref->ClearedCount()){
+            ref->ReleaseCleared();
+        }
 
         tcpclientMgr::m_sInst->rpcCallGate((char*)"UpdateFrameData", 0, 0, (unsigned char*)m_os.str().c_str(), m_os.str().size());
-        LOG("roomid: %d Finnal bin size: %d", m_roomid, pgmsg->ByteSize());
 
         //release msg memory
+        S2CServerFrameUpdate_2001 *p1 = NULL;
+        C2SFrameCommand_2000 *p0 = NULL;
+        long len = 0;
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
-            //delete it->second;
-            roomMgr::m_inst->recyclePt2001(it->second);
+            p1 = it->second;
+            auto ref0 = p1->mutable_cmdlist();
+            ref0->Clear();
+            while(ref0->ClearedCount()){
+                auto p0 = ref0->ReleaseCleared();
+                roomMgr::m_inst->recyclePt(p0);
+                len++;
+            }
+
+            roomMgr::m_inst->recyclePt2001(p1);
         }
+        LOG("roomid: %d Finnal bin size: %d pt2000 len: %d", m_roomid, pgmsg->ByteSize(), len);
         m_allOperMap.clear();
 
     }
@@ -429,19 +450,6 @@ namespace net{
         _unlock(1);
         return it->second;
     }
-    void roomMgr::DelRoom(int roomid){
-        _lock(2);
-        map<int,roomObj*>::iterator it= m_finnalRoomMap.find(roomid);
-        if(it == m_finnalRoomMap.end()){
-            _unlock(2);
-            return ;
-        }
-        roomObj* p = it->second;
-        m_finnalRoomMap.erase(roomid);
-        pushRoom(p);
-        _unlock(2);
-        LOG("roommgr DelRoom roomid: %d", roomid );
-    }
 
     int roomMgr::Count(){
         int size = 0;
@@ -451,17 +459,25 @@ namespace net{
         return size;
     }
 
+    string roomMgr::DebugInfo(){
+        stringstream ss;
+        _lock(9);
+        ss << " 2001 size:" << m_pool2001.size() << endl;
+        ss << " 2000 size:" << m_pool.size() << endl;
+        ss << " roomobj size:" << m_poolRoom.size() << endl;
+        _unlock(9);
+        return ss.str();
+    }
+
     void roomMgr::UpdateFinnal(){
         _lock(8);
-        for(map<int,roomObj*>::iterator it= m_finnalRoomMap.begin(); it!= m_finnalRoomMap.end();it++){
-            roomObj* r = NULL;
-            if(!r){
-                continue;
-            }
+        roomObj* r =NULL;
+        while(!m_finnalRoomQue.empty()){
+            roomObj* r = m_finnalRoomQue.front();
+            m_finnalRoomQue.pop();
             r->Finnal();
             pushRoom(r);
         }
-        m_finnalRoomMap.clear();
         _unlock(8);
     }
     void roomMgr::Update(unsigned int ms){
@@ -476,7 +492,7 @@ namespace net{
                 continue;
             }
             if(it->second->Update(ms) == 1 ){
-                m_finnalRoomMap[it->first] = it->second;
+                m_finnalRoomQue.push(it->second);
                 m_idMap.erase(it++);
             }else{
                 it++;

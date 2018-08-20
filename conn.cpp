@@ -93,7 +93,7 @@ namespace net{
                 break;
             }
             if(s==-1&&errno != EAGAIN ){
-                netServer::g_netServer->appendConnClose(m_fd);
+                netServer::g_netServer->appendConnClose(m_fd, true);
                 break;
             }
             assert(s>0&&s<=nowSize);
@@ -155,7 +155,7 @@ namespace net{
             //   If errno == EAGAIN, that means we have read all
             //   data. So go back to the main loop. 
             if (errno != EAGAIN){
-                netServer::g_netServer->appendConnClose(m_fd);
+                netServer::g_netServer->appendConnClose(m_fd, true);
                 return 0;
             }
             m_bChkReadZero = true;
@@ -165,7 +165,7 @@ namespace net{
         {
             // End of file. The remote has closed the
             //   connection. 
-            netServer::g_netServer->appendConnClose(m_fd);
+            netServer::g_netServer->appendConnClose(m_fd, true);
             return 0;
         }else if (count + m_NetOffset< BUFFER_SIZE){
             m_bChkReadZero = false;
@@ -243,7 +243,7 @@ namespace net{
             }
 
             if(*psize>=64*1024){
-                netServer::g_netServer->appendConnClose(m_fd);
+                netServer::g_netServer->appendConnClose(m_fd, true);
                 LOG("[ERROR] pid: %d msg size: %d exceed 64k", m_pid, *psize);
                 return true;
             }
@@ -262,12 +262,12 @@ namespace net{
     void connRpcObj::rpcCallNet(char* target, unsigned long long pid, unsigned int msgid, 
         unsigned char* pbyte, unsigned int byteLen){
         if(!m_pSendCache){
-            m_pSendCache = new sendCache;
+            m_pSendCache = tcpclientMgr::m_sInst->popSendcache();
         }
         int needSize = rpcObj::getRpcSize(target, pid, msgid, pbyte, byteLen);
         if(needSize > m_pSendCache->getLeftSize()){
             m_sendCacheQueue.push( m_pSendCache );
-            m_pSendCache = new sendCache;
+            m_pSendCache = tcpclientMgr::m_sInst->popSendcache();
         }
         assert( needSize < m_pSendCache->getLeftSize() );
         int offset = rpcObj::encodeBuffer(m_pSendCache->getWritePtr(), target, pid, msgid, pbyte, byteLen);
@@ -293,7 +293,7 @@ namespace net{
             LOG(" send to gate before size: %d limitsize: %d", p->getOffset(), RPC_BUFF_SIZE );
             assert(p->getOffset()<=RPC_BUFF_SIZE);
             if(p->getOffset() == 0){
-                delete p;
+                tcpclientMgr::m_sInst->pushSendcache(p);
                 continue;
             }
             if(ret != -1 ){
@@ -301,12 +301,13 @@ namespace net{
                 if( ret == -1 ){
                     LOG("[ERROR] connRpcObj::dealSend ret fail");
                     OnClose();
+                tcpclientMgr::m_sInst->pushSendcache(p);
                     return -1;
                 }else{
                     LOG(" send to net size: %d", p->getOffset() );
                 }
             }
-            delete p;
+                tcpclientMgr::m_sInst->pushSendcache(p);
         }
         m_pSendCache = NULL;
         return 0;
@@ -368,7 +369,7 @@ namespace net{
             }
 
             if(*psize>=64*1024){
-                netServer::g_netServer->appendConnClose(m_fd);
+                netServer::g_netServer->appendConnClose(m_fd, true);
                 LOG("[ERROR] pid: %d msg size: %d msgid: %d exceed 64k", m_pid, *psize, *pmsgid );
                 return true;
             }

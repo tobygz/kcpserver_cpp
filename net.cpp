@@ -19,7 +19,7 @@
 #include "log.h"
 
 #define MAXEVENTS 1024
-#define NET_OP_ST_POOL_SIZE 1024 * 128
+#define NET_OP_ST_POOL_SIZE 0
 
 namespace net{
 
@@ -229,15 +229,8 @@ namespace net{
     }
 
     void* netServer::netThreadFun( void *param) {
-        netServer *pthis = (netServer*) param;
-
-        /*
-           queue<connObj*> que;
-           for(int i=0;i<4000;i++){
-           que.push( new connObj(i) );
-           }
-           LOG("connobj sizeof: %d que size: %d\n", sizeof(connObj), que.size());
-           */
+        //netServer *&pthis = (netServer*) param;
+        netServer *&pthis = g_netServer;
 
         // Buffer where events are returned 
         struct epoll_event *events;
@@ -394,7 +387,7 @@ namespace net{
         NET_OP_ST *pst = popSt();
         pst->op = DATA_IN;
         pst->fd = fd;
-        this->appendSt(pst);
+        appendSt(pst);
     }
 
     void netServer::appendConnNew(int fd, char *pip, char* pport){
@@ -402,7 +395,7 @@ namespace net{
         pst->op = NEW_CONN;
         pst->fd = fd;
         sprintf(pst->paddr, "%s:%s", pip, pport);        
-        this->appendSt(pst);
+        appendSt(pst);
     }
     void netServer::appendConnClose(int fd, bool bmtx){
         NET_OP_ST *pst = popSt();

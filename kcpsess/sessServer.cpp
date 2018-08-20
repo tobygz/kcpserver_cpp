@@ -278,7 +278,7 @@ void KCPServer::rawCloseConn(int sessid){
     UDPConn *p = it->second;
     m_mapConn.erase(it->first);
     m_mapSessFd.erase( p->getid() );
-    LOG("delConn sessid: %d fd: %d all: %s",p->getid(), p->getfd(), getAllSessid().c_str());
+    LOG("delConn sessid: %d fd: %d ",p->getid(), p->getfd() );
     p->Close();
     pushUDPConn(p);
 }
@@ -302,6 +302,14 @@ void KCPServer::closeConn(int sessid){
     delConn(pconn->getfd());
 }
 
+string KCPServer::DebugInfo(){
+    stringstream ss;
+    pthread_mutex_lock(mutex);
+    ss << "in kcpserver, m_mapSessfd len:" << m_mapSessFd.size() << ", udpconn pool size: " << m_pool.size() << endl;
+    pthread_mutex_unlock(mutex);
+    return ss.str();
+}
+
 string KCPServer::getAllSessid(){
     stringstream ss;
     //pthread_mutex_lock(mutex);
@@ -323,7 +331,7 @@ void KCPServer::delConn(int fd){
     UDPConn *p = it->second;
     m_mapConn.erase(fd);
     m_mapSessFd.erase( p->getid() );
-    LOG("delConn sessid: %d clifd: %d all: %s", p->getid(), p->getfd(), getAllSessid().c_str());
+    LOG("delConn sessid: %d clifd: %d ", p->getid(), p->getfd());
     p->Close();
     pushUDPConn(p);
     pthread_mutex_unlock(mutex);
@@ -351,7 +359,7 @@ void KCPServer::processMsg(int clifd){
     pthread_mutex_lock(mutex);
     map<int,UDPConn*>::iterator it = m_mapConn.find(clifd);
     if(it==m_mapConn.end()){
-        LOG("processMsg failed clifd not found", clifd);
+        LOG("processMsg failed clifd: %d not found", clifd);
         pthread_mutex_unlock(mutex);
         return;
     }
@@ -482,7 +490,7 @@ unsigned long int KCPServer::Listen(const int lport){
 }
 
 void* KCPServer::epThread(void* param){
-    KCPServer *pthis = (KCPServer*)param;
+    KCPServer *&pthis = KCPServer::m_sInst;
     struct epoll_event events[MAXEVENT];
 
     int nfds=0,n=0;

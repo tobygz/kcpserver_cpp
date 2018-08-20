@@ -48,7 +48,7 @@ namespace net{
 
         public:
             ~roomObj();
-            roomObj(){}
+            roomObj();
             void init(int roomid);
             void EnterP(playerObj* p);
             void LeaveP(playerObj* p);
@@ -75,7 +75,7 @@ namespace net{
 
     class roomMgr{
         protected:
-            map<int,roomObj*> m_finnalRoomMap;
+            queue<roomObj*> m_finnalRoomQue;
 
             map<int,roomObj*> m_idMap;
             pthread_mutex_t *mutex ; 
@@ -87,7 +87,6 @@ namespace net{
             roomMgr();
             void AppendR(roomObj *p);
             roomObj* GetRoom(int roomid);
-            void DelRoom(int roomid);
             void Update(unsigned int ms);
             void UpdateFinnal();
             int Count();
@@ -112,6 +111,7 @@ namespace net{
             void pushRoom(roomObj*);
             roomObj* popRoom();
 
+            string DebugInfo();
     };
 
 }
