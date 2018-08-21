@@ -104,17 +104,15 @@ namespace net{
         while(m_accMs>=m_frameTick){
             m_accMs -= m_frameTick;
             S2CServerFrameUpdate_2001 *msg = roomMgr::m_inst->fetchPt2001();
+            auto refp = msg->mutable_cmdlist();
             msg->set_frameid(m_frameId);
 
             for(FRAME_OPER_MAP::iterator it=m_ridOpersMap.begin(); it!= m_ridOpersMap.end(); it++){
                 queue<C2SFrameCommand_2000*>* que = it->second;
                 while(!que->empty()){
                     len++;
-                    C2SFrameCommand_2000 *ptr = msg->add_cmdlist();
-                    C2SFrameCommand_2000 *pop = que->front();
+                    refp->AddAllocated(que->front());
                     que->pop();
-                    ptr->CopyFrom(*pop);
-                    roomMgr::m_inst->recyclePt(pop);
                 }
             }
             //LOG("roomobj::update roomid: %d ms: %u len: %d m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, len, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
@@ -329,6 +327,11 @@ namespace net{
         LOG("roomid: %d Finnal bin size: %d pt2000 len: %d", m_roomid, pgmsg->ByteSize(), len);
         m_allOperMap.clear();
 
+        for(FRAME_OPER_MAP::iterator it=m_ridOpersMap.begin(); it!= m_ridOpersMap.end(); it++){
+            delete it->second;
+        }
+        m_ridOpersMap.clear();
+
     }
     void roomObj::RawOver(){
 
@@ -462,9 +465,9 @@ namespace net{
     string roomMgr::DebugInfo(){
         stringstream ss;
         _lock(9);
-        ss << " 2001 size:" << m_pool2001.size() << endl;
-        ss << " 2000 size:" << m_pool.size() << endl;
-        ss << " roomobj size:" << m_poolRoom.size() << endl;
+        ss << " 2001 count:" << m_pool2001.size() << ",sizeof:"<< sizeof(S2CServerFrameUpdate_2001) << ",mem:" << m_pool2001.size() * sizeof(S2CServerFrameUpdate_2001) << endl;
+        ss << " 2000 count:" << m_pool.size() << ",sizeof:"<< sizeof(C2SFrameCommand_2000) << ",mem:" << m_pool.size() * sizeof(C2SFrameCommand_2000) << endl;
+        ss << " roomobj count:" << m_poolRoom.size() << ",sizeof:"<< sizeof(roomObj) << ",mem:" << m_poolRoom.size() * sizeof(roomObj) << endl;
         _unlock(9);
         return ss.str();
     }

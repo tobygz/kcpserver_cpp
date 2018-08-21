@@ -305,7 +305,8 @@ void KCPServer::closeConn(int sessid){
 string KCPServer::DebugInfo(){
     stringstream ss;
     pthread_mutex_lock(mutex);
-    ss << "in kcpserver, m_mapSessfd len:" << m_mapSessFd.size() << ", udpconn pool size: " << m_pool.size() << endl;
+    ss << "in kcpserver, m_mapSessfd len:" << m_mapSessFd.size() << ", udpconn pool count: ";
+    ss << m_pool.size() << ",sizeof: " << sizeof(UDPConn) << ", mem=" << sizeof(UDPConn)*m_pool.size() << endl;
     pthread_mutex_unlock(mutex);
     return ss.str();
 }

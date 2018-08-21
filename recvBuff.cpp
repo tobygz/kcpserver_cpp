@@ -49,6 +49,9 @@ namespace net{
     }
     /* rpcObj */
     rpcObj::rpcObj(){
+        init();
+    }
+    void rpcObj::init(){
         m_pLen = NULL;
         m_pbody = NULL;
 

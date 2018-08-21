@@ -194,7 +194,7 @@ namespace net{
 
     string playerMgr::DebugInfo(){
         stringstream ss;
-        ss << "in kcpserver, m_ridPMap size:" << m_ridPMap.size() << ", playerobj pool size: " << m_pool.size() << endl;
+        ss << "in kcpserver, m_ridPMap size:" << m_ridPMap.size() << ", playerobj pool size: " << m_pool.size() << ", sizeof:" << sizeof(playerObj) <<",mem:"<< sizeof(playerObj)*m_pool.size() << endl;
         return ss.str();
     }
 

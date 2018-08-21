@@ -53,6 +53,7 @@ namespace net{
 
         public:
             rpcObj();
+            void init();
             ~rpcObj();
             void decodeBuffer(char* p);
             static unsigned int encodeBuffer(unsigned char* p,char* target, 

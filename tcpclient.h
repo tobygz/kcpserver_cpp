@@ -50,11 +50,14 @@ namespace net{
             void rpcCallGame(char* target, unsigned long long pid, unsigned int msgid, unsigned char* pbyte, unsigned int byteLen);            
         private:
             queue<sendCache*> m_pool;
+            queue<rpcObj*> m_rpcPool;
             pthread_mutex_t *mutexPool ;  //for connmgr
         public:
             string DebugInfo();
             void pushSendcache(sendCache* p);
             sendCache* popSendcache();
+            void pushRpcobj(rpcObj*);
+            rpcObj* popRpcobj();
     };
 
     class tcpclient {

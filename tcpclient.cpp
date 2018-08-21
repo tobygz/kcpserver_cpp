@@ -103,6 +103,27 @@ namespace net{
         LOG("tcpclientMgr::writeThread quit");
     }
 
+    void tcpclientMgr::pushRpcobj(rpcObj* p){
+        pthread_mutex_lock(mutexPool);
+        p->init();
+        m_rpcPool.push(p);
+        pthread_mutex_unlock(mutexPool);
+    }
+    rpcObj* tcpclientMgr::popRpcobj(){
+        rpcObj *p = NULL;
+        pthread_mutex_lock(mutexPool);
+        if(m_rpcPool.empty()){
+            p = new rpcObj;
+            LOG("tcpclientMgr new sendCache %p", p );
+        }else{
+            p = m_rpcPool.front();
+            m_rpcPool.pop();
+        }
+        pthread_mutex_unlock(mutexPool);
+        return p;
+    }
+
+
     void tcpclientMgr::pushSendcache(sendCache* p){
         pthread_mutex_lock(mutexPool);
         p->init();
@@ -293,9 +314,9 @@ namespace net{
                 LOG("[INFO] rpc make combine package m_recvOffset:%d offset:%d left: %d bodylen: %d", m_recvOffset, offset,left, bodylen);
                 break;
             }
-            p = new rpcObj();
+
+            p = tcpclientMgr::m_sInst->popRpcobj();
             p->decodeBuffer(m_recvBuffer+offset );
-            //p->ToString();
             pthread_mutex_lock(mutexRecv);
             m_queRpcObj.push(p);
             pthread_mutex_unlock(mutexRecv);
@@ -324,7 +345,7 @@ namespace net{
             }else{
                 rpcGameHandle::m_pInst->process(p);
             }
-            delete p;
+            tcpclientMgr::m_sInst->pushRpcobj(p);
         }
     }
 
