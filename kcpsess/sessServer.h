@@ -72,7 +72,7 @@ class KCPServer {
         unsigned int m_lastMs;
 
         map<int,UDPConn*> m_mapConn;    //fd->conn
-        map<int, int> m_mapSessFd; //sess->fd
+        map<int, UDPConn*> m_mapSessFd; //sess->fd
 
         //conn pid, 
         queue<int> m_epFdQue;
@@ -103,7 +103,7 @@ class KCPServer {
         void closeConn(int sessid);
         void rawCloseConn(int sessid);
         UDPConn* rawGetConn(int sessid);
-        void BindConn(int sessid);
+        UDPConn* BindConn(int sessid);
         pthread_t Listen(const int lport);
         static void* epThread(void*);
         int getEpfd(){return m_epollFd;}

@@ -137,7 +137,7 @@ int main(int argc, char*argv[]){
 
             qpsMgr::g_pQpsMgr->updateQps(1, 1);
 
-            usleep(20);
+            usleep(1);
         }
 
         if(KCPServer::m_sInst){

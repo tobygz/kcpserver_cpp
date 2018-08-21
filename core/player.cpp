@@ -50,12 +50,14 @@ namespace net{
         m_roomid = roomid;
     }
     
-    void playerObj::setSessid(int _id){
+    void playerObj::setSessid(int _id, void*& ref){
         if(m_sessid != 0 ){
             KCPServer::m_sInst->rawCloseConn(m_sessid);
         }
         m_sessid = _id; 
-        KCPServer::m_sInst->BindConn(m_sessid);
+
+        ref = (void*)KCPServer::m_sInst->BindConn(m_sessid);
+        assert(ref);
         m_off = false;
     }
 
@@ -153,6 +155,18 @@ namespace net{
             return NULL;
         }
         return it->second;
+    }
+
+
+    void playerMgr::RemoveP(playerObj *p){
+        if(!p){
+            return;
+        }
+        p->Offline();
+        m_ridPMap.erase(p->getRid());
+        m_pidPMap.erase(p->getpid());
+        LOG("playerMgr::RemoveP pid: %d rid: %lld, roomid: %d p: %p", p->getpid(), p->getRid(), p->getRoomid(), p);
+        pushPlayer(p);
     }
 
     void playerMgr::RemoveP(unsigned long long rid){

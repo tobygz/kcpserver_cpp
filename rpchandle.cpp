@@ -12,6 +12,7 @@
 
 #include "./core/player.h"
 #include "./core/room.h"
+#include "./kcpsess/sessServer.h"
 #include "qps.h"
 
 //for net
@@ -176,7 +177,7 @@ namespace net{
                 p->init(pidvec[jj], ridvec[jj], room->getRoomid());
                 playerMgr::m_inst->AppendP(p);
                 p->setCamp(campvec[jj]);
-                room->EnterP(p);
+                room->EnterP(p, NULL);
             }
             roomMgr::m_inst->AppendR( room );
             LOG("called NewRoom succ, roomid: %d binstr: %s", room->getRoomid(), binstr.c_str());  
@@ -208,6 +209,13 @@ namespace net{
             return 1;
         }
         p->Offline();
+
+        roomObj *room = roomMgr::m_inst->GetRoom( p->getRoomid());
+        if(!room){
+            LOG("[ERROR] LeaveP failed, room is nil roomid: %d pid: %d rid: %ld ", p->getRoomid(), p->getpid(), p->getRid());
+            return -1;
+        }
+        room->LeaveP(p);
         LOG("[INFO] Offlinep succ, rid: %ld", _obj->getPid() );  
         return 0;
     }
@@ -262,7 +270,7 @@ namespace net{
             LOG("[ERROR] enterP failed, p is nil roomid: %d pid: %d rid: %ld ", roomid, pid, rid );
             return -2;
         }
-        room->EnterP(p);
+        room->EnterP(p,NULL);
         LOG("[INFO] enterP succ, roomid: %d pid: %d rid: %ld ", roomid, pid, rid );
         return 0;
     }
@@ -314,8 +322,10 @@ namespace net{
                 LOG("[ERROR] Api_2004 failed, room is nil roomid: %ld", p->getRoomid()); 
                 return ;
             }
-            p->setSessid(sessid);
-            r->EnterP(p);            
+            UDPConn *pconn = NULL;
+            p->setSessid(sessid, (void*&)pconn);
+            assert(pconn);
+            r->EnterP(p, (void*)pconn);            
             LOG("[INFO] Api_2004 , pid: %d, sessid: %d roomid: %d",pid, sessid, p->getRoomid()); 
         }else if( obj->getMsgid() == 2002 ){
             //process 2002
@@ -330,6 +340,7 @@ namespace net{
                 return ;
             }
             r->GetFramesData( p,(char*) obj );
+            LOG("[INFO] Api_2002 , pid: %d, roomid: %d", pid, p->getRoomid()); 
         }else{
             LOG("[ERROR] invalid called, rpcGameHandle::process msgid: %d", obj->getMsgid());
         }

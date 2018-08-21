@@ -33,7 +33,7 @@ namespace net{
             int getRoomid(){ return m_roomid ; }
             int getpid(){ return m_pid; }
             int getSessid()const{ return m_sessid; }
-            void setSessid(int _id);
+            void setSessid(int _id, void* &p);
 
             //tcp
             void sendComRetMsg(unsigned int msgid, int ret);
@@ -61,6 +61,7 @@ namespace net{
             playerObj* GetPByRid(unsigned long long rid);
             playerObj* GetP(int pid);
             void RemoveP(unsigned long long );
+            void RemoveP(playerObj*);
             size_t GetCount(){ return m_ridPMap.size(); }
             
         private:

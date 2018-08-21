@@ -281,7 +281,7 @@ namespace net{
         m_pMsgid= *(unsigned int*)(m_pbody+5+*plen + *plenTar + *plenPa +*plenRes+ sizeof(unsigned long long));
 
         if(netServer::g_netServer->isNet()){
-            assert( chkPt( m_pMsgid ) );
+            //assert( chkPt( m_pMsgid ) );
         }
 
         m_pBodyLen = *(unsigned int*)(m_pbody+5+*plen + *plenTar + *plenPa + *plenRes + sizeof(unsigned long long) + sizeof(unsigned int));

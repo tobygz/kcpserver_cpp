@@ -251,17 +251,12 @@ void KCPServer::sendMsg(int sessid, unsigned char* pbuff, int size){
     if(sessid == 0 ){
         return;
     }
-    map<int,int>::iterator it = m_mapSessFd.find(sessid);
+    map<int,UDPConn*>::iterator it = m_mapSessFd.find(sessid);
     if(it==m_mapSessFd.end()){
         LOG("[ERROR] sendMsg failed, sessid: %d size: %d", sessid, size);
         return;
     }  
-    map<int,UDPConn*>::iterator it1 = m_mapConn.find(it->second);
-    if(it1==m_mapConn.end()){
-        LOG("[ERROR] sendMsg failed, sessid: %d fd: %d size: %d", sessid, it->second, size);
-        return;
-    } 
-    UDPConn *p = it1->second;
+    UDPConn *p = it->second;
     p->Write( (const char*)pbuff, size );
 }
 
@@ -283,12 +278,13 @@ void KCPServer::rawCloseConn(int sessid){
     pushUDPConn(p);
 }
 
-void KCPServer::BindConn(int sessid){
+UDPConn* KCPServer::BindConn(int sessid){
    UDPConn *pconn = rawGetConn(sessid); 
    if(!pconn){
-       return;
+       return NULL;
    }
    pconn->Bind();
+   return pconn;
 }
 
 void KCPServer::closeConn(int sessid){
@@ -313,12 +309,10 @@ string KCPServer::DebugInfo(){
 
 string KCPServer::getAllSessid(){
     stringstream ss;
-    //pthread_mutex_lock(mutex);
-    for(map<int,int>::iterator it=m_mapSessFd.begin(); it!=m_mapSessFd.end(); it++){
+    for(map<int,UDPConn*>::iterator it=m_mapSessFd.begin(); it!=m_mapSessFd.end(); it++){
         ss << it->first;
         ss << " ";
     }
-    //pthread_mutex_unlock(mutex);
     return ss.str();
 }
 
@@ -345,7 +339,7 @@ UDPConn* KCPServer::createConn(int clifd, unsigned char* buf, int len){
     pcon = popUDPConn(); 
     pcon->init(clifd, m_epollFd, g_sess_id, buf, len);
     m_mapConn[clifd] = pcon;
-    m_mapSessFd[g_sess_id] = clifd;
+    m_mapSessFd[g_sess_id] = pcon;
     LOG("createConn sessid: %d clifd: %d len: %d",pcon->getid(), clifd, len);
     setnonblocking(clifd);
     if( len != 0 ){
@@ -566,17 +560,11 @@ UDPConn* KCPServer::popUDPConn(){
 }
 
 UDPConn* KCPServer::rawGetConn(int sessid){
-
-    map<int, int>::iterator it0 = m_mapSessFd.find(sessid);
+    map<int, UDPConn*>::iterator it0 = m_mapSessFd.find(sessid);
     if(it0 == m_mapSessFd.end()){
         return NULL;
     }
-
-    map<int,UDPConn*>::iterator it = m_mapConn.find(it0->second);
-    if( it == m_mapConn.end()){
-        return NULL;
-    }
-    return it->second;
+    return it0->second;
 }
 
 

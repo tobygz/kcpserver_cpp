@@ -373,7 +373,7 @@ namespace net{
                 LOG("[ERROR] pid: %d msg size: %d msgid: %d exceed 64k", m_pid, *psize, *pmsgid );
                 return true;
             }
-            assert( rpcObj::chkPt( *pmsgid ) );
+            //assert( rpcObj::chkPt( *pmsgid ) );
 
             m_pmsg->init(pmsgid, psize, (unsigned char*)(m_NetBuffer+m_ReadOffset+sizeof(int)*2) );
 

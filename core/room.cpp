@@ -14,6 +14,7 @@
 #include "./pb/server.pb.h"
 #include "../tcpclient.h"
 #include "../qps.h"
+#include "../kcpsess/sessServer.h"
 
 #define FRAME_TICK_MS 66
 
@@ -49,10 +50,12 @@ namespace net{
 
         memset(m_buf,0,128);
 
-        m_leaveRidMap.clear();
+        m_pt2001 = NULL;
+
         m_allOperMap.clear();
-        m_ridOpersMap.clear();
-        m_allRidMap.clear();
+        m_ridPMap.clear();
+        m_pidPMap.clear();
+        m_pidConn.clear();
     }
 
     roomObj::roomObj(){
@@ -67,13 +70,19 @@ namespace net{
         LOG("UpdateDelta roomid: %d val: %d", m_roomid, m_frameTick );
     }
 
-    void roomObj::EnterP(playerObj* p){
-        m_allRidMap[p->getRid()] = true;
+    void roomObj::EnterP(playerObj* p, void* pconn){
+        UDPConn *pu = (UDPConn*)pconn;
+        m_ridPMap[p->getRid()] = p;
+        m_pidPMap[p->getpid()] = p;
+        if(pu){
+            m_pidConn[p->getpid()] = (void*)pu;
+        }
+        SvrFrameCmd(p, 0);
         LOG("EnterP roomid: %d rid: %d camp: %d sessid: %d", m_roomid, p->getRid(), p->getCamp(), p->getSessid() );
     }
 
     void roomObj::LeaveP(playerObj* p){
-        m_leaveRidMap[p->getRid()] = true;
+        SvrFrameCmd(p, 1);
         LOG("LeaveP roomid: %d rid: %d camp: %d", m_roomid, p->getRid(), p->getCamp() );
     }
 
@@ -86,7 +95,7 @@ namespace net{
             return 0;
         }
 
-        if(m_allRidMap.size()==0){
+        if(m_ridPMap.size()==0){
             return 0;
         }
 
@@ -100,46 +109,20 @@ namespace net{
         m_accMs += ms - m_lastMs;
         m_lastMs = ms;
 
-        int len = 0;
         while(m_accMs>=m_frameTick){
             m_accMs -= m_frameTick;
-            S2CServerFrameUpdate_2001 *msg = roomMgr::m_inst->fetchPt2001();
-            auto refp = msg->mutable_cmdlist();
-            msg->set_frameid(m_frameId);
-
-            for(FRAME_OPER_MAP::iterator it=m_ridOpersMap.begin(); it!= m_ridOpersMap.end(); it++){
-                queue<C2SFrameCommand_2000*>* que = it->second;
-                while(!que->empty()){
-                    len++;
-                    refp->AddAllocated(que->front());
-                    que->pop();
-                }
+            LOG("roomobj::update roomid: %d ms: %u m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
+            if(!m_pt2001){
+                m_pt2001 = roomMgr::m_inst->fetchPt2001();
             }
-            //LOG("roomobj::update roomid: %d ms: %u len: %d m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, len, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
+            m_pt2001->set_frameid(m_frameId);
             m_tmpDiff = ms;
-            m_allOperMap[m_frameId] = msg;
+            m_allOperMap[m_frameId] = m_pt2001;
             //broadcast msg
-            BroadcastKcp(2001, msg);
+            BroadcastKcp(2001, m_pt2001);
+            m_pt2001 = roomMgr::m_inst->fetchPt2001();
             m_frameId++;
         }
-
-        for(map<unsigned long long, bool>::iterator it=m_leaveRidMap.begin(); it!= m_leaveRidMap.end();it++){
-            playerObj *p = playerMgr::m_inst->GetPByRid(it->first);
-            m_allRidMap.erase(it->first);
-            if(!p){
-                continue;
-            }
-            S2CMatchOver_213 *pmsg = (S2CMatchOver_213*)&S2CMatchOver_213::default_instance();
-            pmsg->Clear();
-            if(m_frameId>0){
-                pmsg->set_overframeid(m_frameId-1);
-            }else{
-                pmsg->set_overframeid(m_frameId);
-            }
-            p->sendPbMsg(213, pmsg);
-            p->Offline();
-        }
-        m_leaveRidMap.clear();
 
         if(m_frameId>=m_endFrameId && m_endFrameId != 2147483648){
             RawOver();
@@ -186,6 +169,27 @@ namespace net{
         p->sendPbMsg(2003, pmsg);
     }
 
+    int roomObj::GetPIdx(playerObj* p){
+        int idx = 0;
+        for(map<int, playerObj*>::iterator it=m_pidPMap.begin(); it!=m_pidPMap.end(); it++){
+            if(it->second->getRid() >= p->getRid()){
+                idx++;
+            }
+        }
+        return idx;
+    }
+
+    void roomObj::SvrFrameCmd(playerObj* p, int param){
+        C2SFrameCommand_2000 *pmsg = roomMgr::m_inst->fetchPt();
+        const int tp = 15;
+        int data = tp & 0xff + ((GetPIdx(p)&0xff) << 8) + ((param&0xffff)<<16);
+        pmsg->set_data( data );
+        if(!m_pt2001){
+            m_pt2001 = roomMgr::m_inst->fetchPt2001();
+        }
+        m_pt2001->mutable_cmdlist()->AddAllocated(pmsg);
+    }
+
     void roomObj::FrameCmd(playerObj* p, char* cobj ){
         msgObj* obj = (msgObj*) cobj;
         C2SFrameCommand_2000 *pmsg = roomMgr::m_inst->fetchPt();
@@ -193,14 +197,12 @@ namespace net{
         istringstream is(val);
         pmsg->ParseFromIstream(&is);
 
-        FRAME_OPER_MAP::iterator it = m_ridOpersMap.find(p->getRid());
-        if(it == m_ridOpersMap.end()){
-            queue<C2SFrameCommand_2000*>* pque = new queue<C2SFrameCommand_2000*>;
-            pque->push(pmsg);
-            m_ridOpersMap[p->getRid()] = pque;
-        }else{
-            it->second->push(pmsg);
+        if(!m_pt2001) {
+            m_pt2001 = roomMgr::m_inst->fetchPt2001();
         }
+        m_pt2001->mutable_cmdlist()->AddAllocated(pmsg);
+
+        LOG("roomObj::FrameCmd roomid: %d pid: %d",m_roomid, p->getpid());
     }
 
 
@@ -240,28 +242,25 @@ namespace net{
     }
 
     void roomObj::Broadcast(unsigned char* buf, int size, int msgid){
-        for(map<unsigned long long,bool>::iterator it=m_allRidMap.begin();it!=m_allRidMap.end();it++){
-            playerObj *player = playerMgr::m_inst->GetPByRid(it->first);
-            if(!player){
+        for(map<unsigned long long,playerObj*>::iterator it=m_ridPMap.begin();it!=m_ridPMap.end();it++){
+            auto p = it->second;
+            if(!p){
                 continue;
             }
-            if(player->isOff()){
+            if(p->isOff()){
                 continue;
             }
-            player->sendMsg( buf, size, msgid );
+            p->sendMsg( buf, size, msgid );
         }
     }
 
     void roomObj::BroadcastKcp(unsigned char* buf, int size){
-        for(map<unsigned long long,bool>::iterator it=m_allRidMap.begin();it!=m_allRidMap.end();it++){
-            playerObj *player = playerMgr::m_inst->GetPByRid(it->first);
-            if(!player){
+        for(map<int,void*>::iterator it=m_pidConn.begin();it!=m_pidConn.end();it++){
+            UDPConn *p = (UDPConn*)it->second;
+            if(!p){
                 continue;
             }
-            if(player->isOff()){
-                continue;
-            }
-            player->sendKcpMsg( buf, size );
+            p->Write((const char*)buf, size);
         }
     }
     void roomObj::BroadcastKcp(int msgid, ::google::protobuf::Message* pmsg){
@@ -310,7 +309,6 @@ namespace net{
 
         //release msg memory
         S2CServerFrameUpdate_2001 *p1 = NULL;
-        C2SFrameCommand_2000 *p0 = NULL;
         long len = 0;
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
             p1 = it->second;
@@ -326,12 +324,6 @@ namespace net{
         }
         LOG("roomid: %d Finnal bin size: %d pt2000 len: %d", m_roomid, pgmsg->ByteSize(), len);
         m_allOperMap.clear();
-
-        for(FRAME_OPER_MAP::iterator it=m_ridOpersMap.begin(); it!= m_ridOpersMap.end(); it++){
-            delete it->second;
-        }
-        m_ridOpersMap.clear();
-
     }
     void roomObj::RawOver(){
 
@@ -346,7 +338,7 @@ namespace net{
         m_brun = false;
         LOG("roomid: %d RawOver m_frameId: %d", m_roomid, m_frameId );
 
-        for(map<unsigned long long,bool>::iterator it=m_allRidMap.begin(); it!=m_allRidMap.end();it++){
+        for(map<unsigned long long,playerObj*>::iterator it=m_ridPMap.begin(); it!=m_ridPMap.end();it++){
             playerMgr::m_inst->RemoveP(it->first);
         }
     }
@@ -476,7 +468,7 @@ namespace net{
         _lock(8);
         roomObj* r =NULL;
         while(!m_finnalRoomQue.empty()){
-            roomObj* r = m_finnalRoomQue.front();
+            r = m_finnalRoomQue.front();
             m_finnalRoomQue.pop();
             r->Finnal();
             pushRoom(r);

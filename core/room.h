@@ -39,18 +39,24 @@ namespace net{
             unsigned int m_frameTick;
             bool m_gateOver;
             
+            S2CServerFrameUpdate_2001* m_pt2001;
             //for record datas
-            FRAME_OPER_MAP m_ridOpersMap;
             map<int,S2CServerFrameUpdate_2001*> m_allOperMap;
-            map<unsigned long long, bool> m_leaveRidMap;
 
             //for verify
 
+            //for player
+            map<unsigned long long,playerObj*> m_ridPMap;
+            map<int, playerObj*> m_pidPMap;
+            map<int, void*> m_pidConn;
+            
+            int GetPIdx(playerObj* );
+            void SvrFrameCmd(playerObj* , int );
         public:
             ~roomObj();
             roomObj();
             void init(int roomid);
-            void EnterP(playerObj* p);
+            void EnterP(playerObj* p, void*);
             void LeaveP(playerObj* p);
             int  Update(unsigned int ms);
             void FrameCmd(playerObj* p, char* );
