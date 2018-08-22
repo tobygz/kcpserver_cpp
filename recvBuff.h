@@ -78,38 +78,6 @@ namespace net{
             
     };
 
-    /*
-    class recvBuff  {
-        private:
-            char    m_pMem[ DEFAULT_RECV_SIZE ];
-            char*   m_pBuffer;
-            int     m_iBuffSize;
-            char*   m_pPointer;
-            bool    m_bCanUnPack;
-
-            int m_Msgid;
-
-        public:
-            ~recvBuff();
-            recvBuff( int size );
-
-            eRecvType m_eType;
-
-            int     getBodyLen() {return m_iBuffSize;}
-            int     getMsgid() {return m_Msgid;}
-            void    setMsgid(int val) {m_Msgid = val;}
-
-            void    getMem( char* &pMem ) const;
-
-            char    readChar();
-            short   readShort();
-            int     readInt();
-            int     readString( char* &pStr);
-
-            bool    unpack();
-    };
-    */
-
     class sendCache {
         unsigned char m_mem[RPC_BUFF_SIZE];
         unsigned int m_offset;//write size
