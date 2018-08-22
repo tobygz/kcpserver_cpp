@@ -226,7 +226,7 @@ namespace net{
     string connObjMgr::getGameByPid(int pid){
         map<int, string>::iterator it = m_connPidGameMap.find(pid);
         if( it==m_connPidGameMap.end()){
-            return NULL;
+            return "";
         }
         return it->second;
     }

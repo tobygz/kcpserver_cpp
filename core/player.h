@@ -32,8 +32,9 @@ namespace net{
             void setRoomid(int val){ m_roomid= val; }
             int getRoomid(){ return m_roomid ; }
             int getpid(){ return m_pid; }
+            void setpid(int v){ m_pid = v; }
             int getSessid()const{ return m_sessid; }
-            void setSessid(int _id, void* &p);
+            void setSessid(int _id, void* &p, int);
 
             //tcp
             void sendComRetMsg(unsigned int msgid, int ret);
@@ -63,6 +64,7 @@ namespace net{
             void RemoveP(unsigned long long );
             void RemoveP(playerObj*);
             size_t GetCount(){ return m_ridPMap.size(); }
+            void UpdatePlayer(playerObj *, int pid);
             
         private:
             queue<playerObj*> m_pool;

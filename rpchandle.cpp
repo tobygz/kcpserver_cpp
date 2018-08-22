@@ -37,6 +37,7 @@
 #define RPC_API_2002 "2002"
 #define RPC_API_2003 "2003"
 #define RPC_API_2004 "2004"
+#define RPC_API_2005 "2005"
 
 
 namespace net{
@@ -120,6 +121,7 @@ namespace net{
         m_mapHandler[string(RPC_API_2002 )] = &net::rpcGameHandle::Api_2002;
         m_mapHandler[string(RPC_API_2003 )] = &net::rpcGameHandle::Api_2003;
         m_mapHandler[string(RPC_API_2004 )] = &net::rpcGameHandle::Api_2004;
+        m_mapHandler[string(RPC_API_2005 )] = &net::rpcGameHandle::Api_2005;
     }
 
 
@@ -203,7 +205,7 @@ namespace net{
         return 0;
     }
     int rpcGameHandle::OfflineP(rpcObj* _obj){ 
-        playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
+        playerObj *p = playerMgr::m_inst->GetPByRid( _obj->getPid() );
         if(!p){
             LOG("[ERROR] OfflineP failed, player is nil rid: %ld", _obj->getPid() );  
             return 1;
@@ -291,52 +293,43 @@ namespace net{
     }
 
     //process kcp request
-    void rpcGameHandle::process(msgObj* obj, int pid, int sessid){
+    void rpcGameHandle::processKcp(msgObj* obj, int pid, int sessid, int roomid){
         if( obj->getMsgid() != 2000 ){
             LOG("[ERROR] rpcGameHandle::process msgid: %d", obj->getMsgid());
         }
+        roomObj *r = roomMgr::m_inst->GetRoom( roomid );
+        if(!r){
+            LOG("[ERROR] Api_process failed, room is nil roomid: %d", roomid );
+            return ;
+        }
         if(obj->getMsgid()==2000){
             //process 2000
-            playerObj *p = playerMgr::m_inst->GetP( pid );
-            if(!p){
-                LOG("[ERROR] Api_2000 failed, player is nil rid: %ld", pid );
-                return ;
-            }
-
-            roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
-            if(!r){
-                LOG("[ERROR] Api_2000 failed, room is nil roomid: %ld", p->getRoomid()); 
-                return ;
-            }
-
-            r->FrameCmd(p, (char*)obj);            
+            r->FrameCmd(pid, (char*)obj);            
         }else if( obj->getMsgid() == 2004 ){
+            auto msg2004 = C2SUDPReg_2004::default_instance();
+            string val((char*)obj->getBodyPtr(), obj->getBodylen());
+            istringstream is(val);
+            msg2004.ParseFromIstream(&is);
+            //assert(obj->getBodylen()>=8);
+            //unsigned long long rid = *(unsigned long long*)obj->getBodyPtr();
             //process 2004
-            playerObj *p = playerMgr::m_inst->GetP( pid );
+
+            playerObj *p = r->getR( msg2004.rid() );
             if(!p){
-                LOG("[ERROR] Api_2004 failed, player is nil rid: %ld", pid );
+                LOG("[ERROR] Api_2004 failed, player is nil pid: %ld", pid );
                 return ;
             }
-            roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
-            if(!r){
-                LOG("[ERROR] Api_2004 failed, room is nil roomid: %ld", p->getRoomid()); 
-                return ;
-            }
+            playerMgr::m_inst->UpdatePlayer(p, pid);
             UDPConn *pconn = NULL;
-            p->setSessid(sessid, (void*&)pconn);
+            p->setSessid(sessid, (void*&)pconn, pid);
             assert(pconn);
             r->EnterP(p, (void*)pconn);            
             LOG("[INFO] Api_2004 , pid: %d, sessid: %d roomid: %d",pid, sessid, p->getRoomid()); 
         }else if( obj->getMsgid() == 2002 ){
             //process 2002
-            playerObj *p = playerMgr::m_inst->GetP( pid );
+            playerObj *p = r->getP( pid );
             if(!p){
                 LOG("[ERROR] Api_2002 failed, player is nil rid: %ld", pid );
-                return ;
-            }
-            roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
-            if(!r){
-                LOG("[ERROR] Api_2002 failed, room is nil roomid: %ld", p->getRoomid()); 
                 return ;
             }
             r->GetFramesData( p,(char*) obj );
@@ -372,9 +365,10 @@ namespace net{
         LOG("called Api_2003");  
         playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
         if(!p){
-            LOG("[ERROR] Api_2003 failed, player is nil rid: %ld", _obj->getPid() );  
+            LOG("[ERROR] Api_2003 failed, player is nil pid: %d", _obj->getPid() );  
             return 1;
         }
+
         roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
         if(!r){
             p->sendComRetMsg(2003,1);
@@ -392,6 +386,31 @@ namespace net{
         LOG("called Api_2003 rid: %d roomid: %d beginid: %d",p->getRid(), r->getRoomid(), pmsg->beginframeid() );  
         return 0;
     }
+
+    int rpcGameHandle::Api_2005(rpcObj* _obj){ 
+
+        playerObj *p = playerMgr::m_inst->GetP( _obj->getPid() );
+        if(!p){
+            LOG("[ERROR] Api_2005 failed, player is nil rid: %ld", _obj->getPid() );  
+            return 1;
+        }
+
+        roomObj *r = roomMgr::m_inst->GetRoom( p->getRoomid());
+        if(!r){
+            p->sendComRetMsg(2005,1);
+            return 1;
+        }
+        if(r->IsOver()){
+            p->sendComRetMsg(2005,2);
+            return 2;
+        }
+        auto pmsg = C2SVerifyFrameSync_2005::default_instance();
+        string val((char*)_obj->getBodyPtr(), _obj->getBodylen());
+        istringstream is(val);
+        pmsg.ParseFromIstream(&is);
+        r->VerifyFrame(p, pmsg.frameid(), pmsg.verifydata() );
+    }
+
     int rpcGameHandle::Api_2004(rpcObj* _obj){ 
         LOG("called Api_2004");  
         /*

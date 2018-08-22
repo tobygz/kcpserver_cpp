@@ -77,12 +77,12 @@ namespace net{
         if(pu){
             m_pidConn[p->getpid()] = (void*)pu;
         }
-        SvrFrameCmd(p, 0);
+        SvrFrameCmd(p, 1);
         LOG("EnterP roomid: %d rid: %d camp: %d sessid: %d", m_roomid, p->getRid(), p->getCamp(), p->getSessid() );
     }
 
     void roomObj::LeaveP(playerObj* p){
-        SvrFrameCmd(p, 1);
+        SvrFrameCmd(p, 0);
         LOG("LeaveP roomid: %d rid: %d camp: %d", m_roomid, p->getRid(), p->getCamp() );
     }
 
@@ -111,7 +111,9 @@ namespace net{
 
         while(m_accMs>=m_frameTick){
             m_accMs -= m_frameTick;
-            LOG("roomobj::update roomid: %d ms: %u m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
+            if(ms-m_tmpDiff > m_frameTick+10){
+                LOG("roomobj::update roomid: %d ms: %u m_frameId: %d m_accMs: %u m_lastMs: %u diff: %d",m_roomid, ms, m_frameId, m_accMs, m_lastMs, ms-m_tmpDiff );
+            }
             if(!m_pt2001){
                 m_pt2001 = roomMgr::m_inst->fetchPt2001();
             }
@@ -147,15 +149,24 @@ namespace net{
             map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.find(fid);
             if(it==m_allOperMap.end()){
                 //add log fatal error
-                assert(false);
                 continue;
             }
             S2CServerFrameUpdate_2001* tmp = dmsg->add_framedatalist();
             tmp->CopyFrom(*it->second);
         }
         p->sendPbKcpMsg(2002, dmsg);
+
+        auto p2001 = dmsg->framedatalist();
+        p2001.Clear();
+        while(p2001.ClearedCount()){
+            auto tmpp = p2001.ReleaseCleared();
+            roomMgr::m_inst->recyclePt2001(tmpp);
+        }
     }
 
+    void roomObj::VerifyFrame(playerObj* p, int fid, int vdata ){
+        LOG("roomObj::VerifyFrame, roomid: %d pid: %d fid: %d data: %d", m_roomid,p->getpid(), fid, vdata );
+    }
     void roomObj::GetCacheFrames(playerObj* p, unsigned int beginid ){
         S2CGetSyncCacheFrames_2003 *pmsg = (S2CGetSyncCacheFrames_2003 *)&S2CGetSyncCacheFrames_2003::default_instance();
         pmsg->Clear();
@@ -172,7 +183,10 @@ namespace net{
     int roomObj::GetPIdx(playerObj* p){
         int idx = 0;
         for(map<int, playerObj*>::iterator it=m_pidPMap.begin(); it!=m_pidPMap.end(); it++){
-            if(it->second->getRid() >= p->getRid()){
+            if(it->second->getCamp() > 1 ){
+                continue;
+            }
+            if(p->getRid() >= it->second->getRid() ){
                 idx++;
             }
         }
@@ -182,7 +196,8 @@ namespace net{
     void roomObj::SvrFrameCmd(playerObj* p, int param){
         C2SFrameCommand_2000 *pmsg = roomMgr::m_inst->fetchPt();
         const int tp = 15;
-        int data = tp & 0xff + ((GetPIdx(p)&0xff) << 8) + ((param&0xffff)<<16);
+        int pidx = GetPIdx(p);
+        int data = (tp & 0xff) + ((pidx&0xff) << 8) + ((param&0xffff)<<16);
         pmsg->set_data( data );
         if(!m_pt2001){
             m_pt2001 = roomMgr::m_inst->fetchPt2001();
@@ -190,7 +205,28 @@ namespace net{
         m_pt2001->mutable_cmdlist()->AddAllocated(pmsg);
     }
 
-    void roomObj::FrameCmd(playerObj* p, char* cobj ){
+    playerObj* roomObj::getP(int pid){
+        map<int, playerObj*>::iterator it = m_pidPMap.find(pid);
+        if(it==m_pidPMap.end()){
+            return NULL;
+        }
+        return it->second;
+    }
+    playerObj* roomObj::getR(unsigned long long rid){
+        map<unsigned long long, playerObj*>::iterator it = m_ridPMap.find(rid);
+        if(it==m_ridPMap.end()){
+            return NULL;
+        }
+        return it->second;
+    }
+
+    void roomObj::FrameCmd(int pid, char* cobj ){
+        auto p = getP(pid);
+        if(!p){
+            LOG("[ERROR] FrameCmd failed, pid: %d", pid);
+            return;
+        }
+
         msgObj* obj = (msgObj*) cobj;
         C2SFrameCommand_2000 *pmsg = roomMgr::m_inst->fetchPt();
         string val((char*)obj->getBodyPtr(), obj->getBodylen());
@@ -202,7 +238,7 @@ namespace net{
         }
         m_pt2001->mutable_cmdlist()->AddAllocated(pmsg);
 
-        LOG("roomObj::FrameCmd roomid: %d pid: %d",m_roomid, p->getpid());
+        LOG("roomObj::FrameCmd roomid: %d pid: %d",m_roomid, pid);
     }
 
 
@@ -312,14 +348,6 @@ namespace net{
         long len = 0;
         for(map<int,S2CServerFrameUpdate_2001*>::iterator it = m_allOperMap.begin(); it!=m_allOperMap.end();it++){
             p1 = it->second;
-            auto ref0 = p1->mutable_cmdlist();
-            ref0->Clear();
-            while(ref0->ClearedCount()){
-                auto p0 = ref0->ReleaseCleared();
-                roomMgr::m_inst->recyclePt(p0);
-                len++;
-            }
-
             roomMgr::m_inst->recyclePt2001(p1);
         }
         LOG("roomid: %d Finnal bin size: %d pt2000 len: %d", m_roomid, pgmsg->ByteSize(), len);
@@ -389,6 +417,12 @@ namespace net{
     }
 
     void roomMgr::recyclePt2001(S2CServerFrameUpdate_2001* p){
+        auto ref0 = p->mutable_cmdlist();
+        ref0->Clear();
+        while(ref0->ClearedCount()){
+            auto p0 = ref0->ReleaseCleared();
+            recyclePt(p0);
+        }
         m_pool2001.push(p);
     }
 

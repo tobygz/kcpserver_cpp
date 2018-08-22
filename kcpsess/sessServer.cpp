@@ -206,11 +206,11 @@ int UDPConn::OnDealMsg(unsigned int ms, msgObj* pmsg){
     }
     unsigned int *pmsgid = (unsigned int*)(m_cacheBuf+m_offset+4);
     unsigned long long ppid = *(unsigned long long*)(m_cacheBuf+m_offset+8);
-    //int roomid = (ppid&0xffffffff00000000) >> 32;
+    int roomid = (ppid&0xffffffff00000000) >> 32;
     int pid = ppid&0x00000000ffffffff;
     pmsg->init(pmsgid, bodylen, (unsigned char*)(m_cacheBuf+m_offset+16));
 
-    rpcGameHandle::m_pInst->process(pmsg, pid, m_id);
+    rpcGameHandle::m_pInst->processKcp(pmsg, pid, m_id, roomid);
 
     qpsMgr::g_pQpsMgr->updateQps(4, *bodylen);
 

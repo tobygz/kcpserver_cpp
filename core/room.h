@@ -59,7 +59,7 @@ namespace net{
             void EnterP(playerObj* p, void*);
             void LeaveP(playerObj* p);
             int  Update(unsigned int ms);
-            void FrameCmd(playerObj* p, char* );
+            void FrameCmd(int, char* );
             void GetFramesData(playerObj* p, char* );
 
             void GetCacheFrames(playerObj* p, unsigned int beginid );
@@ -74,6 +74,11 @@ namespace net{
             void SetReady();
             void RawOver();
             void Finnal();
+            void VerifyFrame(playerObj* p, int fid, int vdata );
+
+
+            playerObj* getP(int);
+            playerObj* getR(unsigned long long);
 
             void UpdateDelta(unsigned int );
             int getRoomid(){ return m_roomid; }

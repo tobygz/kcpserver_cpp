@@ -43,7 +43,7 @@ namespace net{
         rpcGameHandle();
         void init();
         void process(rpcObj* pobj);
-        void process(msgObj* obj, int pid, int sessid);
+        void processKcp(msgObj* obj, int pid, int sessid, int roomid);
         
         //from gate
         int NewRoom(rpcObj*);
@@ -63,6 +63,7 @@ namespace net{
         int Api_2002(rpcObj*);
         int Api_2003(rpcObj*);
         int Api_2004(rpcObj*);
+        int Api_2005(rpcObj*);
 
 
     };

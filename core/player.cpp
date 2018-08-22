@@ -50,11 +50,12 @@ namespace net{
         m_roomid = roomid;
     }
     
-    void playerObj::setSessid(int _id, void*& ref){
+    void playerObj::setSessid(int _id, void*& ref, int pid){
         if(m_sessid != 0 ){
             KCPServer::m_sInst->rawCloseConn(m_sessid);
         }
         m_sessid = _id; 
+        m_pid = pid;
 
         ref = (void*)KCPServer::m_sInst->BindConn(m_sessid);
         assert(ref);
@@ -129,6 +130,12 @@ namespace net{
 
     playerMgr::playerMgr(){
         initObjPool();
+    }
+    void playerMgr::UpdatePlayer(playerObj* p, int pid){
+        m_pidPMap.erase(p->getpid());
+        p->setpid(pid);
+        AppendP(p);
+        LOG("playerMgr::UpdatePlayer pid: %d old pid: %d rid: %lld, roomid: %d p: %p",pid, p->getpid(), p->getRid(), p->getRoomid(), p);
     }
     void playerMgr::AppendP(playerObj* p){
         m_ridPMap[p->getRid()] = p;

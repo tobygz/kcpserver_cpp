@@ -172,6 +172,9 @@ namespace net{
 
     void tcpclientMgr::rpcCallGame(char* target, unsigned long long pid, unsigned int msgid, unsigned char* pbyte, unsigned int byteLen){
         string sname = connObjMgr::g_pConnMgr->getGameByPid((unsigned int)pid);
+        if(sname.size() == 0 ){
+            return;
+        }
         tcpclient* pclient = getTcpClient(sname.c_str());
         if(!pclient ){
             LOG("[ERROR] rpcCallGame rpc: %s failed, find game: %s failed", target, sname.c_str());
