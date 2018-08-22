@@ -78,12 +78,12 @@ namespace net{
             m_pidConn[p->getpid()] = (void*)pu;
         }
         SvrFrameCmd(p, 1);
-        LOG("EnterP roomid: %d rid: %d camp: %d sessid: %d", m_roomid, p->getRid(), p->getCamp(), p->getSessid() );
+        LOG("EnterP roomid: %d pid: %d rid: %d camp: %d sessid: %d",p->getpid(), m_roomid, p->getRid(), p->getCamp(), p->getSessid() );
     }
 
     void roomObj::LeaveP(playerObj* p){
         SvrFrameCmd(p, 0);
-        LOG("LeaveP roomid: %d rid: %d camp: %d", m_roomid, p->getRid(), p->getCamp() );
+        LOG("LeaveP roomid: %d pid: %d rid: %d camp: %d",p->getpid(), m_roomid, p->getRid(), p->getCamp() );
     }
 
     int roomObj::Update(unsigned int ms){
@@ -182,11 +182,11 @@ namespace net{
 
     int roomObj::GetPIdx(playerObj* p){
         int idx = 0;
-        for(map<int, playerObj*>::iterator it=m_pidPMap.begin(); it!=m_pidPMap.end(); it++){
+        for(map<unsigned long long, playerObj*>::iterator it=m_ridPMap.begin(); it!=m_ridPMap.end(); it++){
             if(it->second->getCamp() > 1 ){
                 continue;
             }
-            if(p->getRid() >= it->second->getRid() ){
+            if(p->getRid() >= it->first ){
                 idx++;
             }
         }
