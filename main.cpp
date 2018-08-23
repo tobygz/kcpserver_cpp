@@ -161,6 +161,7 @@ int main(int argc, char*argv[]){
         pthread_join(rpcid_r, NULL);
         pthread_join(rpcid_w, NULL);
     }
+    printf("server exited\n");
     return 0;
 }
 

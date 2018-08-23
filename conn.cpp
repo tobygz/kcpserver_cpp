@@ -18,7 +18,7 @@ namespace net{
     connRpcObj* connRpcObj::m_inst = NULL;
 
     void connObj::OnClose(bool btimeOut){
-        LOG("called onclose fd: %d pid: %d ", this->GetFd(), this->GetPid());
+        LOG("called onclose fd: %d pid: %d btimeout: %d", this->GetFd(), this->GetPid(), btimeOut);
         close(GetFd());
         m_bclose = true;
         if(btimeOut){
@@ -63,7 +63,9 @@ namespace net{
                 int leftSize = m_sendBufLen-m_sendBufOffset;
                 int newSize = size+leftSize;
                 char* p = new char[newSize];
-                memcpy(p, m_psendBuf+m_sendBufOffset,leftSize);
+                if(leftSize>0){
+                    memcpy(p, m_psendBuf+m_sendBufOffset,leftSize);
+                }
                 memcpy(p+leftSize, buf, size );
                 delete[] m_psendBuf;
                 m_psendBuf = p;
@@ -72,12 +74,13 @@ namespace net{
                 m_sendBufLen = newSize;
             }else{
                 memcpy(m_psendBuf+m_sendBufLen, buf, size );
+                m_sendBufLen += size;
             }
         }
         //chkmem();
-        m_sendBufLen += size;
-        assert(m_sendBufOffset>=0&&m_sendBufOffset<=BUFFER_SIZE);
-        assert(m_sendBufLen>=0&&m_sendBufLen<=BUFFER_SIZE);
+        //m_sendBufLen += size;
+        //assert(m_sendBufOffset>=0&&m_sendBufOffset<=BUFFER_SIZE);
+        //assert(m_sendBufLen>=0&&m_sendBufLen<=BUFFER_SIZE);
         size_t s = 0;
         size_t nowSize=0;
         const size_t SEND_SIZE=64*1024;
@@ -97,8 +100,8 @@ namespace net{
                 break;
             }
             assert(s>0&&s<=nowSize);
-            assert(m_sendBufOffset>=0&&m_sendBufOffset<=BUFFER_SIZE);
-            assert(m_sendBufLen>=0&&m_sendBufLen<=BUFFER_SIZE);
+            //assert(m_sendBufOffset>=0&&m_sendBufOffset<=BUFFER_SIZE);
+            //assert(m_sendBufLen>=0&&m_sendBufLen<=BUFFER_SIZE);
             m_sendBufOffset += s;
             LOG("connObj::send pid: %d  s: %d m_sendBufOffset: %d m_sendBufLen: %d", m_pid, s, m_sendBufOffset, m_sendBufLen );
             if(m_sendBufOffset >= m_sendBufLen){
