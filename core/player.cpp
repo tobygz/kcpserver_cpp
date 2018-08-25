@@ -93,7 +93,6 @@ namespace net{
     void playerObj::sendKcpMsg(unsigned char* pbuff, size_t size){
         //call kcp
         KCPServer::m_sInst->sendMsg(m_sessid, pbuff, size);
-        qpsMgr::g_pQpsMgr->updateQps(3, size);
     }
     void playerObj::sendPbKcpMsg(unsigned int msgid, ::google::protobuf::Message* pmsg){
         if( m_sessid == 0 ){

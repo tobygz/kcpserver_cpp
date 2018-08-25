@@ -238,7 +238,7 @@ namespace net{
         }
         m_pt2001->mutable_cmdlist()->AddAllocated(pmsg);
 
-        LOG("roomObj::FrameCmd roomid: %d pid: %d",m_roomid, pid);
+        //LOG("roomObj::FrameCmd roomid: %d pid: %d",m_roomid, pid);
     }
 
 
@@ -297,6 +297,7 @@ namespace net{
                 continue;
             }
             p->Write((const char*)buf, size);
+            qpsMgr::g_pQpsMgr->updateQps(3, size);
         }
     }
     void roomObj::BroadcastKcp(int msgid, ::google::protobuf::Message* pmsg){
@@ -341,7 +342,7 @@ namespace net{
             ref->ReleaseCleared();
         }
 
-        tcpclientMgr::m_sInst->rpcCallGate((char*)"UpdateFrameData", 0, 0, (unsigned char*)m_os.str().c_str(), m_os.str().size());
+        tcpclientMgr::m_sInst->rpcCallGate((char*)"UpdateFrameData", m_roomid, 0, (unsigned char*)m_os.str().c_str(), m_os.str().size());
 
         //release msg memory
         S2CServerFrameUpdate_2001 *p1 = NULL;
